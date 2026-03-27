@@ -39,6 +39,8 @@ class WC_UCP_Validator {
     public static function validate_checkout_create( $data ) {
         $errors = array();
 
+        $data = self::normalize_line_items_input( $data );
+
         if ( empty( $data['line_items'] ) || ! is_array( $data['line_items'] ) ) {
             $errors[] = array(
                 'type'     => 'validation',
@@ -201,6 +203,8 @@ class WC_UCP_Validator {
     public static function sanitize_line_item( $item ) {
         $sanitized = array();
 
+        $item = self::normalize_line_item_structure( $item );
+
         if ( isset( $item['item']['id'] ) ) {
             $sanitized['item'] = array(
                 'id' => sanitize_text_field( $item['item']['id'] ),
@@ -274,5 +278,56 @@ class WC_UCP_Validator {
         }
 
         return $product;
+    }
+
+    /**
+     * Normalize shorthand line item structures into canonical shape.
+     *
+     * Accepts either {"id": 123} or {"item": {"id": 123}} and converts to the latter.
+     *
+     * @param array $item Raw line item data.
+     * @return array
+     */
+    private static function normalize_line_item_structure( $item ) {
+        if ( ! is_array( $item ) ) {
+            return $item;
+        }
+
+        if ( isset( $item['item'] ) && is_array( $item['item'] ) && isset( $item['item']['id'] ) ) {
+            return $item;
+        }
+
+        if ( ! isset( $item['item'] ) || ! is_array( $item['item'] ) ) {
+            $item['item'] = array();
+        }
+
+        if ( isset( $item['id'] ) && ! isset( $item['item']['id'] ) ) {
+            $item['item']['id'] = $item['id'];
+            unset( $item['id'] );
+        }
+
+        if ( isset( $item['product_id'] ) && ! isset( $item['item']['id'] ) ) {
+            $item['item']['id'] = $item['product_id'];
+        }
+
+        return $item;
+    }
+
+    /**
+     * Normalize line_item entries on incoming payloads.
+     *
+     * @param array $data Raw request data.
+     * @return array
+     */
+    private static function normalize_line_items_input( $data ) {
+        if ( empty( $data['line_items'] ) || ! is_array( $data['line_items'] ) ) {
+            return $data;
+        }
+
+        foreach ( $data['line_items'] as $index => $item ) {
+            $data['line_items'][ $index ] = self::normalize_line_item_structure( $item );
+        }
+
+        return $data;
     }
 }

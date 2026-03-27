@@ -150,6 +150,10 @@ Creates a new checkout session with line items and optional buyer info.
 }
 ```
 
+For compatibility with lightweight agents, the plugin also accepts the shorthand
+`{"id": 123, "quantity": 2}` form for `line_items`; it is normalized to the
+canonical `item.id` structure shown above before validation.
+
 **Response (201 Created):** UCP Card (see Section 4)
 
 #### PUT /checkout-sessions/{id} — Update Session
