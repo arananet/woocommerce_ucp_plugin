@@ -30,7 +30,7 @@ abstract class WC_UCP_REST_Controller extends WP_REST_Controller {
             return $auth_result;
         }
 
-        if ( empty( $auth_result['customer_id'] ) ) {
+        if ( ! array_key_exists( 'customer_id', $auth_result ) ) {
             return new WP_Error(
                 'ucp_auth_required',
                 'Authentication is required for this operation.',
