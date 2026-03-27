@@ -11,26 +11,45 @@ defined( 'ABSPATH' ) || exit;
 class WC_UCP_Discovery {
 
     public function __construct() {
-        add_action( 'init', array( $this, 'handle_discovery_request' ), 1 );
+        add_action( 'init', array( $this, 'add_rewrite_rules' ) );
+        add_filter( 'query_vars', array( $this, 'add_query_vars' ) );
+        add_action( 'template_redirect', array( $this, 'handle_discovery_request' ) );
     }
 
     /**
-     * Handle the discovery request directly by checking the request URI.
+     * Add rewrite rules for /.well-known/ucp.
+     */
+    public function add_rewrite_rules() {
+        add_rewrite_rule(
+            '^\.well-known/ucp/?$',
+            'index.php?wc_ucp_discovery=1',
+            'top'
+        );
+    }
+
+    /**
+     * Register custom query variable.
+     *
+     * @param array $vars Existing query vars.
+     * @return array
+     */
+    public function add_query_vars( $vars ) {
+        $vars[] = 'wc_ucp_discovery';
+        return $vars;
+    }
+
+    /**
+     * Handle the discovery request.
      */
     public function handle_discovery_request() {
-        if ( ! isset( $_SERVER['REQUEST_URI'] ) ) {
-            return;
-        }
-
-        $request_uri = $_SERVER['REQUEST_URI'];
-
-        // Check if this is a request for /.well-known/ucp
-        if ( ! preg_match( '#^/\.well-known/ucp/?$#', $request_uri ) ) {
+        if ( ! get_query_var( 'wc_ucp_discovery' ) ) {
             return;
         }
 
         // Check if UCP is enabled.
         if ( 'yes' !== get_option( 'wc_ucp_enabled', 'yes' ) ) {
+            global $wp_query;
+            $wp_query->set_404();
             status_header( 404 );
             exit;
         }

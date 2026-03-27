@@ -47,6 +47,7 @@ class WC_UCP_Admin {
      */
     public function update_settings() {
         woocommerce_update_options( $this->get_settings() );
+        flush_rewrite_rules();
     }
 
     /**
