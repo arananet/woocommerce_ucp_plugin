@@ -149,14 +149,17 @@ class WC_UCP_Discovery {
 
         $profile_version = $this->profile_version ?: WC_UCP_SPEC_VERSION;
 
+        $capabilities     = $this->get_capability_map( $profile_version );
+        $payment_handlers = $this->get_payment_handler_map( $profile_version );
+
         $manifest = array(
             'ucp' => array(
                 'version'            => $profile_version,
                 'spec'               => 'https://ucp.dev/' . $profile_version . '/specification/overview/',
                 'supported_versions' => $this->get_supported_versions(),
-                'services'           => $this->get_service_map( $rest_url, $profile_version ),
-                'capabilities'       => $this->get_capability_map( $profile_version ),
-                'payment_handlers'   => $this->get_payment_handler_map( $profile_version ),
+                'services'           => $this->get_service_map( $rest_url, $profile_version, $capabilities, $payment_handlers ),
+                'capabilities'       => $capabilities,
+                'payment_handlers'   => $payment_handlers,
             ),
             'business' => array(
                 'name' => get_bloginfo( 'name' ),
@@ -188,32 +191,49 @@ class WC_UCP_Discovery {
      * Build the services map, keyed by service id.
      *
      * @param string $rest_url Base REST URL.
+     * @param array  $capabilities Capability map keyed by capability id.
+     * @param array  $payment_handlers Payment handler map keyed by handler id.
      * @return array
      */
-    private function get_service_map( $rest_url, $version ) {
+    private function get_service_map( $rest_url, $version, $capabilities, $payment_handlers ) {
         $spec = 'https://ucp.dev/' . $version . '/specification/overview/';
-        $rest    = untrailingslashit( $rest_url );
+        $rest = untrailingslashit( $rest_url );
 
-        $services = array(
-            'dev.ucp.shopping' => array(
-                array(
-                    'version'   => $version,
-                    'spec'      => $spec,
-                    'transport' => 'rest',
-                    'endpoint'  => $rest,
-                    'schema'    => 'https://ucp.dev/services/shopping/rest.openrpc.json',
-                ),
-                array(
-                    'version'   => $version,
-                    'spec'      => $spec,
-                    'transport' => 'mcp',
-                    'endpoint'  => $rest . '/mcp',
-                    'schema'    => 'https://ucp.dev/services/shopping/openrpc.json',
-                ),
+        $capability_ids = array_keys( $capabilities );
+
+        $extension_ids = array();
+        foreach ( $capabilities as $capability_id => $entries ) {
+            foreach ( (array) $entries as $entry ) {
+                if ( isset( $entry['extends'] ) ) {
+                    $extension_ids[] = $capability_id;
+                    break;
+                }
+            }
+        }
+        $extension_ids = array_values( array_unique( $extension_ids ) );
+
+        $service = array(
+            'id'                => 'dev.ucp.shopping',
+            'version'           => $version,
+            'spec'              => $spec,
+            'capabilities'      => $capability_ids,
+            'extensions'        => $extension_ids,
+            'payment_handlers'  => array_keys( $payment_handlers ),
+            'endpoints'         => array(
+                'rest' => $rest,
+                'mcp'  => $rest . '/mcp',
+            ),
+            'schemas'           => array(
+                'rest' => 'https://ucp.dev/services/shopping/rest.openrpc.json',
+                'mcp'  => 'https://ucp.dev/services/shopping/openrpc.json',
             ),
         );
 
-        return apply_filters( 'wc_ucp_services', $services );
+        $services = array(
+            'dev.ucp.shopping' => array( $service ),
+        );
+
+        return apply_filters( 'wc_ucp_services', $services, $rest_url, $version, $capabilities, $payment_handlers );
     }
 
     /**

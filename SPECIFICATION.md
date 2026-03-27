@@ -28,18 +28,28 @@ capabilities, extensions, payment handlers, and transports.
     "services": {
       "dev.ucp.shopping": [
         {
+          "id": "dev.ucp.shopping",
           "version": "2026-01-23",
           "spec": "https://ucp.dev/2026-01-23/specification/overview/",
-          "transport": "rest",
-          "endpoint": "https://example.com/wp-json/ucp/v1",
-          "schema": "https://ucp.dev/services/shopping/rest.openrpc.json"
-        },
-        {
-          "version": "2026-01-23",
-          "spec": "https://ucp.dev/2026-01-23/specification/overview/",
-          "transport": "mcp",
-          "endpoint": "https://example.com/wp-json/ucp/v1/mcp",
-          "schema": "https://ucp.dev/services/shopping/openrpc.json"
+          "capabilities": [
+            "dev.ucp.shopping.checkout",
+            "dev.ucp.shopping.fulfillment",
+            "dev.ucp.shopping.discount",
+            "dev.ucp.shopping.order"
+          ],
+          "extensions": [
+            "dev.ucp.shopping.fulfillment",
+            "dev.ucp.shopping.discount"
+          ],
+          "payment_handlers": ["stripe"],
+          "endpoints": {
+            "rest": "https://example.com/wp-json/ucp/v1",
+            "mcp": "https://example.com/wp-json/ucp/v1/mcp"
+          },
+          "schemas": {
+            "rest": "https://ucp.dev/services/shopping/rest.openrpc.json",
+            "mcp": "https://ucp.dev/services/shopping/openrpc.json"
+          }
         }
       ]
     },
@@ -97,6 +107,10 @@ capabilities, extensions, payment handlers, and transports.
   }
 }
 ```
+
+Each service entry consolidates its transports under the `endpoints` object and
+lists negotiated `capabilities`/`extensions`, giving agents a single record to
+reason about before calling REST or MCP tools.
 
 ### Capability Naming
 
