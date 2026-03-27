@@ -11,53 +11,43 @@ defined( 'ABSPATH' ) || exit;
 class WC_UCP_Discovery {
 
     public function __construct() {
-        add_action( 'init', array( $this, 'maybe_add_rewrite_rules' ) );
-        add_filter( 'query_vars', array( $this, 'add_query_vars' ) );
-        add_action( 'template_redirect', array( $this, 'handle_discovery_request' ) );
+        add_action( 'init', array( $this, 'handle_discovery_request' ), 1 );
     }
 
     /**
-     * Register rewrite rules for /.well-known/ucp if UCP is enabled.
-     */
-    public function maybe_add_rewrite_rules() {
-        if ( 'yes' === get_option( 'wc_ucp_enabled', 'yes' ) ) {
-            $this->add_rewrite_rules();
-        }
-    }
-
-    /**
-     * Register rewrite rules for /.well-known/ucp.
-     */
-    public function add_rewrite_rules() {
-        add_rewrite_rule(
-            '^\.well-known/ucp/?$',
-            'index.php?wc_ucp_discovery=1',
-            'top'
-        );
-    }
-
-    /**
-     * Register custom query variable.
-     *
-     * @param array $vars Existing query vars.
-     * @return array
-     */
-    public function add_query_vars( $vars ) {
-        $vars[] = 'wc_ucp_discovery';
-        return $vars;
-    }
-
-    /**
-     * Handle the discovery request and return JSON manifest.
+     * Handle the discovery request directly by checking the request URI.
      */
     public function handle_discovery_request() {
-        if ( ! get_query_var( 'wc_ucp_discovery' ) ) {
+        if ( ! isset( $_SERVER['REQUEST_URI'] ) ) {
+            return;
+        }
+
+        $request_uri = $_SERVER['REQUEST_URI'];
+
+        // Check if this is a request for /.well-known/ucp
+        if ( ! preg_match( '#^/\.well-known/ucp/?$#', $request_uri ) ) {
             return;
         }
 
         // Check if UCP is enabled.
         if ( 'yes' !== get_option( 'wc_ucp_enabled', 'yes' ) ) {
             status_header( 404 );
+            exit;
+        }
+
+        // Only handle GET and OPTIONS requests
+        if ( ! in_array( $_SERVER['REQUEST_METHOD'], array( 'GET', 'OPTIONS' ) ) ) {
+            status_header( 405 );
+            header( 'Allow: GET, OPTIONS' );
+            exit;
+        }
+
+        // Handle OPTIONS request for CORS preflight
+        if ( $_SERVER['REQUEST_METHOD'] === 'OPTIONS' ) {
+            status_header( 200 );
+            header( 'Access-Control-Allow-Origin: *' );
+            header( 'Access-Control-Allow-Methods: GET, OPTIONS' );
+            header( 'Access-Control-Allow-Headers: *' );
             exit;
         }
 
