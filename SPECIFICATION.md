@@ -18,38 +18,43 @@ capabilities, extensions, payment handlers, and transports.
 
 ```json
 {
-  "ucp": "2026-01-23",
-  "business": {
-    "name": "Store Name",
-    "url": "https://example.com"
-  },
-  "services": [
-    {
-      "id": "dev.ucp.shopping",
-      "transports": [
-        { "type": "rest", "endpoint": "https://example.com/wp-json/ucp/v1" },
-        { "type": "mcp", "endpoint": "https://example.com/wp-json/ucp/v1/mcp" }
-      ],
-      "capabilities": [
-        {
-          "id": "dev.ucp.shopping.checkout",
-          "version": "2026-01-23",
-          "spec": "https://ucp.dev/2026-01-23/specification/checkout-rest/",
-          "schema": "https://ucp.dev/schemas/shopping/checkout.json"
-        }
-      ],
-      "extensions": [
-        { "id": "dev.ucp.shopping.fulfillment", "extends": "dev.ucp.shopping.checkout" },
-        { "id": "dev.ucp.shopping.discount", "extends": "dev.ucp.shopping.checkout" },
-        { "id": "dev.ucp.shopping.order" }
-      ],
-      "payment_handlers": [
-        { "id": "stripe", "type": "psp" }
-      ]
+  "profile": {
+    "ucp": {
+      "version": "2026-01-23",
+      "spec": "https://ucp.dev/2026-01-23/specification/overview/"
+    },
+    "business": {
+      "name": "Store Name",
+      "url": "https://example.com"
+    },
+    "services": [
+      {
+        "id": "dev.ucp.shopping",
+        "transports": [
+          { "type": "rest", "endpoint": "https://example.com/wp-json/ucp/v1" },
+          { "type": "mcp", "endpoint": "https://example.com/wp-json/ucp/v1/mcp" }
+        ],
+        "capabilities": [
+          {
+            "id": "dev.ucp.shopping.checkout",
+            "version": "2026-01-23",
+            "spec": "https://ucp.dev/2026-01-23/specification/checkout-rest/",
+            "schema": "https://ucp.dev/schemas/shopping/checkout.json"
+          }
+        ],
+        "extensions": [
+          { "id": "dev.ucp.shopping.fulfillment", "extends": "dev.ucp.shopping.checkout" },
+          { "id": "dev.ucp.shopping.discount", "extends": "dev.ucp.shopping.checkout" },
+          { "id": "dev.ucp.shopping.order" }
+        ],
+        "payment_handlers": [
+          { "id": "stripe", "type": "psp" }
+        ]
+      }
+    ],
+    "authentication": {
+      "methods": ["api_key", "oauth2"]
     }
-  ],
-  "authentication": {
-    "methods": ["api_key", "oauth2"]
   }
 }
 ```

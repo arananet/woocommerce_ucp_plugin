@@ -125,8 +125,11 @@ class WC_UCP_Discovery {
         $site_url = site_url();
         $rest_url = rest_url( 'ucp/v1' );
 
-        $manifest = array(
-            'ucp'      => WC_UCP_SPEC_VERSION,
+        $profile = array(
+            'ucp'      => array(
+                'version' => WC_UCP_SPEC_VERSION,
+                'spec'    => 'https://ucp.dev/' . WC_UCP_SPEC_VERSION . '/specification/overview/',
+            ),
             'business' => array(
                 'name' => get_bloginfo( 'name' ),
                 'url'  => $site_url,
@@ -141,6 +144,10 @@ class WC_UCP_Discovery {
                 ),
             ),
             'authentication' => $this->get_authentication( $rest_url ),
+        );
+
+        $manifest = array(
+            'profile' => $profile,
         );
 
         return apply_filters( 'wc_ucp_discovery_manifest', $manifest );
