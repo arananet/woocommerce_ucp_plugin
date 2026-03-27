@@ -500,19 +500,81 @@ class WC_UCP_Checkout_Controller extends WC_UCP_REST_Controller {
             if ( ! empty( $addr['company'] ) )   $order->set_shipping_company( $addr['company'] );
         }
 
-        if ( ! empty( $buyer['billing_address'] ) ) {
-            $addr = $buyer['billing_address'];
-            if ( ! empty( $addr['address_1'] ) ) $order->set_billing_address_1( $addr['address_1'] );
-            if ( ! empty( $addr['address_2'] ) ) $order->set_billing_address_2( $addr['address_2'] );
-            if ( ! empty( $addr['city'] ) )      $order->set_billing_city( $addr['city'] );
-            if ( ! empty( $addr['state'] ) )     $order->set_billing_state( $addr['state'] );
-            if ( ! empty( $addr['postcode'] ) )  $order->set_billing_postcode( $addr['postcode'] );
-            if ( ! empty( $addr['country'] ) )   $order->set_billing_country( $addr['country'] );
-        }
-    }
+		if ( ! empty( $buyer['billing_address'] ) ) {
+			$addr = $buyer['billing_address'];
+			if ( ! empty( $addr['address_1'] ) ) $order->set_billing_address_1( $addr['address_1'] );
+			if ( ! empty( $addr['address_2'] ) ) $order->set_billing_address_2( $addr['address_2'] );
+			if ( ! empty( $addr['city'] ) )      $order->set_billing_city( $addr['city'] );
+			if ( ! empty( $addr['state'] ) )     $order->set_billing_state( $addr['state'] );
+			if ( ! empty( $addr['postcode'] ) )  $order->set_billing_postcode( $addr['postcode'] );
+			if ( ! empty( $addr['country'] ) )   $order->set_billing_country( $addr['country'] );
+		}
 
-    /**
-     * Process payment using AP2 mandate or fallback.
+		$this->maybe_populate_shipping_from_billing( $order );
+	}
+
+	/**
+	 * Populate shipping fields from billing when only one address was provided.
+	 *
+	 * Many merchants only collect a billing address in chat. Woo requires a
+	 * shipping destination for physical goods, so mirror the billing data when
+	 * the order still needs a shipping address and none has been set yet.
+	 *
+	 * @param WC_Order $order WooCommerce order.
+	 */
+	private function maybe_populate_shipping_from_billing( $order ) {
+		if ( ! $order->needs_shipping_address() ) {
+			return;
+		}
+
+		$has_shipping_address = $order->get_shipping_address_1() || $order->get_shipping_city() || $order->get_shipping_country() || $order->get_shipping_postcode();
+		if ( $has_shipping_address ) {
+			return;
+		}
+
+		if ( ! $order->get_billing_address_1() ) {
+			return;
+		}
+
+		if ( ! $order->get_shipping_first_name() && $order->get_billing_first_name() ) {
+			$order->set_shipping_first_name( $order->get_billing_first_name() );
+		}
+
+		if ( ! $order->get_shipping_last_name() && $order->get_billing_last_name() ) {
+			$order->set_shipping_last_name( $order->get_billing_last_name() );
+		}
+
+		if ( $order->get_billing_company() ) {
+			$order->set_shipping_company( $order->get_billing_company() );
+		}
+
+		if ( $order->get_billing_address_1() ) {
+			$order->set_shipping_address_1( $order->get_billing_address_1() );
+		}
+
+		if ( $order->get_billing_address_2() ) {
+			$order->set_shipping_address_2( $order->get_billing_address_2() );
+		}
+
+		if ( $order->get_billing_city() ) {
+			$order->set_shipping_city( $order->get_billing_city() );
+		}
+
+		if ( $order->get_billing_state() ) {
+			$order->set_shipping_state( $order->get_billing_state() );
+		}
+
+		if ( $order->get_billing_postcode() ) {
+			$order->set_shipping_postcode( $order->get_billing_postcode() );
+		}
+
+		if ( $order->get_billing_country() ) {
+			$order->set_shipping_country( $order->get_billing_country() );
+		}
+	}
+
+	/**
+	 * Process payment using AP2 mandate or fallback.
      *
      * @param WC_Order $order        WooCommerce order.
      * @param array    $payment_data Payment data from request.
