@@ -42,7 +42,7 @@ class WC_UCP_Discovery {
      * Handle the discovery request.
      */
     public function handle_discovery_request() {
-        if ( ! get_query_var( 'wc_ucp_discovery' ) ) {
+        if ( ! $this->is_discovery_request() ) {
             return;
         }
 
@@ -53,6 +53,9 @@ class WC_UCP_Discovery {
             status_header( 404 );
             exit;
         }
+
+        global $wp_query;
+        $wp_query->is_404 = false;
 
         // Only handle GET and OPTIONS requests
         if ( ! in_array( $_SERVER['REQUEST_METHOD'], array( 'GET', 'OPTIONS' ) ) ) {
@@ -81,6 +84,36 @@ class WC_UCP_Discovery {
 
         echo wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
         exit;
+    }
+
+    /**
+     * Determine whether the current request targets /.well-known/ucp.
+     *
+     * This lets us serve the manifest even if rewrite rules have not been
+     * flushed yet (common after manual deployments).
+     *
+     * @return bool
+     */
+    private function is_discovery_request() {
+        if ( get_query_var( 'wc_ucp_discovery' ) ) {
+            return true;
+        }
+
+        if ( empty( $_SERVER['REQUEST_URI'] ) ) {
+            return false;
+        }
+
+        $request_path  = wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
+        $expected_path = wp_make_link_relative( home_url( '/.well-known/ucp' ) );
+
+        if ( empty( $request_path ) || empty( $expected_path ) ) {
+            return false;
+        }
+
+        $request_path  = trim( $request_path, '/' );
+        $expected_path = trim( $expected_path, '/' );
+
+        return $request_path === $expected_path;
     }
 
     /**
