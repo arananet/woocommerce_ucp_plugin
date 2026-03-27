@@ -281,19 +281,33 @@ class WC_UCP_Card_Builder {
             }
         }
 
-        $shipping = WC()->shipping();
-        if ( $shipping ) {
-            $shipping->calculate_shipping( array( $package ) );
-            $packages = $shipping->get_packages();
+        if ( empty( $package['destination']['country'] ) || empty( $package['destination']['postcode'] ) ) {
+            return $options;
+        }
 
-            if ( ! empty( $packages[0]['rates'] ) ) {
-                foreach ( $packages[0]['rates'] as $rate ) {
-                    $options[] = array(
-                        'id'     => $rate->get_id(),
-                        'label'  => $rate->get_label(),
-                        'amount' => wc_format_decimal( $rate->get_cost(), 2 ),
-                    );
-                }
+        $shipping = WC()->shipping();
+        if ( ! $shipping ) {
+            return $options;
+        }
+
+        try {
+            $shipping->calculate_shipping( array( $package ) );
+        } catch ( Exception $e ) {
+            if ( isset( WC_UCP_Plugin::instance()->logger ) ) {
+                WC_UCP_Plugin::instance()->logger->warning( 'Shipping calculation failed while building card.', array( 'error' => $e->getMessage() ) );
+            }
+            return $options;
+        }
+
+        $packages = $shipping->get_packages();
+
+        if ( ! empty( $packages[0]['rates'] ) ) {
+            foreach ( $packages[0]['rates'] as $rate ) {
+                $options[] = array(
+                    'id'     => $rate->get_id(),
+                    'label'  => $rate->get_label(),
+                    'amount' => wc_format_decimal( $rate->get_cost(), 2 ),
+                );
             }
         }
 

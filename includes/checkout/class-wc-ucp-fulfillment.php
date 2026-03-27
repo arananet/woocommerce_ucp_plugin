@@ -93,12 +93,28 @@ class WC_UCP_Fulfillment {
             }
         }
 
+        if ( empty( $package['destination']['country'] ) || empty( $package['destination']['postcode'] ) ) {
+            return new WP_Error(
+                'shipping_address_required',
+                __( 'Shipping address must include country and postcode before selecting a fulfillment option.', 'woocommerce-ucp' ),
+                array( 'status' => 409 )
+            );
+        }
+
         $shipping = WC()->shipping();
         if ( ! $shipping ) {
             return new WP_Error( 'shipping_unavailable', 'Shipping calculation is not available.', array( 'status' => 500 ) );
         }
 
-        $shipping->calculate_shipping( array( $package ) );
+        try {
+            $shipping->calculate_shipping( array( $package ) );
+        } catch ( Exception $e ) {
+            return new WP_Error(
+                'shipping_calculation_failed',
+                sprintf( __( 'Unable to calculate shipping rates: %s', 'woocommerce-ucp' ), $e->getMessage() ),
+                array( 'status' => 500 )
+            );
+        }
         $packages = $shipping->get_packages();
 
         if ( ! empty( $packages[0]['rates'][ $rate_id ] ) ) {
@@ -115,7 +131,7 @@ class WC_UCP_Fulfillment {
 
         return new WP_Error(
             'invalid_fulfillment_option',
-            'The selected fulfillment option is not available.',
+            __( 'The selected fulfillment option is not available for the provided address.', 'woocommerce-ucp' ),
             array( 'status' => 400 )
         );
     }

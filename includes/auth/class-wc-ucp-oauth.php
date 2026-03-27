@@ -23,6 +23,11 @@ class WC_UCP_OAuth {
                 'callback'            => array( $this, 'authorize' ),
                 'permission_callback' => '__return_true',
             ),
+            array(
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array( $this, 'authorize' ),
+                'permission_callback' => '__return_true',
+            ),
         ) );
 
         // Token endpoint.
@@ -55,14 +60,12 @@ class WC_UCP_OAuth {
 
     /**
      * Authorization endpoint.
-     * In a real implementation, this would render a consent page.
-     * For API-only use, it validates parameters and issues auth code.
      *
      * @param WP_REST_Request $request Request object.
      * @return WP_REST_Response|WP_Error
      */
     public function authorize( $request ) {
-        $response_type = $request->get_param( 'response_type' );
+        $response_type = $request->get_param( 'response_type' ) ?: 'code';
         $client_id     = sanitize_text_field( $request->get_param( 'client_id' ) );
         $redirect_uri  = esc_url_raw( $request->get_param( 'redirect_uri' ) );
         $scope         = sanitize_text_field( $request->get_param( 'scope' ) ?: 'checkout' );
@@ -91,25 +94,56 @@ class WC_UCP_OAuth {
             return new WP_Error( 'invalid_request', 'Only S256 code_challenge_method is supported.', array( 'status' => 400 ) );
         }
 
-        // Check if user is logged in (WordPress session).
         if ( ! is_user_logged_in() ) {
-            // Redirect to login page with return URL.
-            $login_url = wp_login_url( $request->get_route() . '?' . http_build_query( $request->get_params() ) );
-            return new WP_REST_Response( array(
-                'redirect' => $login_url,
-                'message'  => 'User authentication required. Please log in.',
-            ), 302 );
+            $login_url = $this->build_login_redirect_url( $request );
+            return $this->redirect_response( $login_url, 302, array(
+                'message' => 'User authentication required. Please log in.',
+            ) );
         }
 
         $customer_id = get_current_user_id();
+        $customer    = new WC_Customer( $customer_id );
 
-        // Verify user is a WC customer.
-        $customer = new WC_Customer( $customer_id );
         if ( ! $customer->get_id() ) {
             return new WP_Error( 'invalid_user', 'User is not a valid customer.', array( 'status' => 403 ) );
         }
 
-        // Generate authorization code.
+        $method = strtoupper( $request->get_method() );
+        $params = array(
+            'client_id'             => $client_id,
+            'redirect_uri'          => $redirect_uri,
+            'scope'                 => $scope,
+            'state'                 => $state,
+            'response_type'         => $response_type,
+            'code_challenge'        => $code_challenge,
+            'code_challenge_method' => $code_challenge_method,
+            'route'                 => $request->get_route(),
+        );
+
+        if ( 'POST' !== $method ) {
+            return $this->render_consent_screen( $client, $customer, $params );
+        }
+
+        $nonce = sanitize_text_field( $request->get_param( '_wpnonce' ) );
+        if ( ! wp_verify_nonce( $nonce, 'wc_ucp_oauth_authorize' ) ) {
+            return new WP_Error( 'invalid_nonce', 'Session expired. Please try again.', array( 'status' => 400 ) );
+        }
+
+        $decision = sanitize_text_field( $request->get_param( 'decision' ) );
+        if ( 'deny' === $decision ) {
+            $error_params = array( 'error' => 'access_denied' );
+            if ( ! empty( $state ) ) {
+                $error_params['state'] = $state;
+            }
+
+            $deny_url = add_query_arg( $error_params, $redirect_uri );
+            return $this->redirect_response( $deny_url, 302 );
+        }
+
+        if ( 'approve' !== $decision ) {
+            return $this->render_consent_screen( $client, $customer, $params );
+        }
+
         $token_store = new WC_UCP_Token_Store();
         $code        = $token_store->create_auth_code(
             $client_id,
@@ -120,7 +154,6 @@ class WC_UCP_OAuth {
             $code_challenge_method
         );
 
-        // Build redirect URL with code.
         $redirect_params = array( 'code' => $code );
         if ( ! empty( $state ) ) {
             $redirect_params['state'] = $state;
@@ -128,10 +161,7 @@ class WC_UCP_OAuth {
 
         $redirect_url = add_query_arg( $redirect_params, $redirect_uri );
 
-        return new WP_REST_Response( array(
-            'redirect' => $redirect_url,
-            'code'     => $code,
-        ), 200 );
+        return $this->redirect_response( $redirect_url, 302, array( 'code' => $code ) );
     }
 
     /**
@@ -287,5 +317,128 @@ class WC_UCP_OAuth {
         }
 
         return $client;
+    }
+
+    /**
+     * Build a login redirect URL preserving the OAuth query parameters.
+     *
+     * @param WP_REST_Request $request Request.
+     * @return string
+     */
+    private function build_login_redirect_url( $request ) {
+        $route  = trim( $request->get_route(), '/' );
+        $target = rest_url( $route );
+
+        $allowed_params = array( 'response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method' );
+        $query          = array();
+
+        foreach ( $allowed_params as $param ) {
+            $value = $request->get_param( $param );
+            if ( null !== $value && '' !== $value ) {
+                $query[ $param ] = is_string( $value ) ? $value : wp_json_encode( $value );
+            }
+        }
+
+        if ( ! empty( $query ) ) {
+            $target = add_query_arg( $query, $target );
+        }
+
+        return wp_login_url( $target );
+    }
+
+    /**
+     * Send a redirect response with proper headers.
+     *
+     * @param string $url    Target URL.
+     * @param int    $status HTTP status.
+     * @param array  $body   Optional response payload.
+     * @return WP_REST_Response
+     */
+    private function redirect_response( $url, $status = 302, $body = array() ) {
+        $response = new WP_REST_Response( $body, $status );
+        $response->header( 'Location', $url );
+        return $response;
+    }
+
+    /**
+     * Render the OAuth consent template.
+     *
+     * @param object      $client   OAuth client row.
+     * @param WC_Customer $customer WooCommerce customer.
+     * @param array       $params   Request context.
+     * @return WP_REST_Response
+     */
+    private function render_consent_screen( $client, $customer, $params ) {
+        $template = WC_UCP_PLUGIN_DIR . 'includes/auth/templates/oauth-consent.php';
+
+        $form_action = rest_url( trim( $params['route'], '/' ) );
+        $nonce       = wp_create_nonce( 'wc_ucp_oauth_authorize' );
+
+        $hidden_fields = array(
+            'response_type'         => $params['response_type'],
+            'client_id'             => $params['client_id'],
+            'redirect_uri'          => $params['redirect_uri'],
+            'scope'                 => $params['scope'],
+            'state'                 => $params['state'],
+            'code_challenge'        => $params['code_challenge'],
+            'code_challenge_method' => $params['code_challenge_method'],
+            '_wpnonce'              => $nonce,
+        );
+
+        $hidden_fields = array_filter( $hidden_fields, static function( $value ) {
+            return null !== $value && '' !== $value;
+        } );
+
+        $scopes = $this->describe_scopes( $params['scope'] );
+
+        $context = array(
+            'site_name'      => get_bloginfo( 'name' ),
+            'client_name'    => $client->name,
+            'customer_name'  => $customer->get_display_name(),
+            'customer_email' => $customer->get_email(),
+            'scopes'         => $scopes,
+            'form_action'    => $form_action,
+            'hidden_fields'  => $hidden_fields,
+        );
+
+        ob_start();
+        extract( $context, EXTR_SKIP );
+        require $template;
+        $html = ob_get_clean();
+
+        $response = new WP_REST_Response( $html, 200 );
+        $response->header( 'Content-Type', 'text/html; charset=utf-8' );
+        return $response;
+    }
+
+    /**
+     * Map requested scopes to human-readable descriptions.
+     *
+     * @param string $scope_string Scope string from request.
+     * @return array
+     */
+    private function describe_scopes( $scope_string ) {
+        $labels = array(
+            'checkout' => __( 'Create and update checkout sessions.', 'woocommerce-ucp' ),
+            'orders'   => __( 'View your recent orders and status.', 'woocommerce-ucp' ),
+            'profile'  => __( 'Access basic profile details (name, email).', 'woocommerce-ucp' ),
+        );
+
+        $scopes = preg_split( '/\s+/', trim( (string) $scope_string ) );
+        $scopes = array_filter( $scopes );
+
+        if ( empty( $scopes ) ) {
+            $scopes = array( 'checkout' );
+        }
+
+        $descriptions = array();
+        foreach ( $scopes as $scope ) {
+            $descriptions[] = array(
+                'id'          => $scope,
+                'description' => isset( $labels[ $scope ] ) ? $labels[ $scope ] : sprintf( __( 'Access scope: %s', 'woocommerce-ucp' ), $scope ),
+            );
+        }
+
+        return $descriptions;
     }
 }

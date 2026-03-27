@@ -53,7 +53,7 @@ WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) fo
 ### Authentication
 
 - **API Key:** Send `X-API-Key` header (keys may be scoped to a WooCommerce customer or left unassigned for guest checkouts)
-- **OAuth 2.0:** Send `Authorization: Bearer {token}` header
+- **OAuth 2.0:** Send `Authorization: Bearer {token}` header; customers see a built-in consent screen after logging in so they can approve or deny access before tokens issue
 - Discovery and product catalog endpoints are public by default
 
 ## Installation
