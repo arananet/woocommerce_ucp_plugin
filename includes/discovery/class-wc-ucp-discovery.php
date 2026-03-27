@@ -10,6 +10,13 @@ defined( 'ABSPATH' ) || exit;
 
 class WC_UCP_Discovery {
 
+    /**
+     * Requested manifest version (draft or dated) derived from the request URI.
+     *
+     * @var string|null
+     */
+    private $profile_version = null;
+
     public function __construct() {
         add_action( 'init', array( $this, 'add_rewrite_rules' ) );
         add_filter( 'query_vars', array( $this, 'add_query_vars' ) );
@@ -25,6 +32,11 @@ class WC_UCP_Discovery {
             'index.php?wc_ucp_discovery=1',
             'top'
         );
+        add_rewrite_rule(
+            '^\.well-known/ucp/([^/]+)/?$',
+            'index.php?wc_ucp_discovery=1&wc_ucp_profile_version=$matches[1]',
+            'top'
+        );
     }
 
     /**
@@ -35,6 +47,7 @@ class WC_UCP_Discovery {
      */
     public function add_query_vars( $vars ) {
         $vars[] = 'wc_ucp_discovery';
+        $vars[] = 'wc_ucp_profile_version';
         return $vars;
     }
 
@@ -96,6 +109,7 @@ class WC_UCP_Discovery {
      */
     private function is_discovery_request() {
         if ( get_query_var( 'wc_ucp_discovery' ) ) {
+            $this->profile_version = get_query_var( 'wc_ucp_profile_version', null );
             return true;
         }
 
@@ -103,17 +117,25 @@ class WC_UCP_Discovery {
             return false;
         }
 
-        $request_path  = wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
-        $expected_path = wp_make_link_relative( home_url( '/.well-known/ucp' ) );
+        $request_path = wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
+        $request_path = trim( $request_path, '/' );
 
-        if ( empty( $request_path ) || empty( $expected_path ) ) {
+        if ( empty( $request_path ) ) {
             return false;
         }
 
-        $request_path  = trim( $request_path, '/' );
-        $expected_path = trim( $expected_path, '/' );
+        $expected = trim( wp_make_link_relative( home_url( '/.well-known/ucp' ) ), '/' );
 
-        return $request_path === $expected_path;
+        if ( $request_path === $expected ) {
+            return true;
+        }
+
+        if ( preg_match( '#^' . preg_quote( $expected, '#' ) . '/([^/]+)$#', $request_path, $matches ) ) {
+            $this->profile_version = sanitize_title_with_dashes( $matches[1] );
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -125,14 +147,16 @@ class WC_UCP_Discovery {
         $site_url = site_url();
         $rest_url = rest_url( 'ucp/v1' );
 
+        $profile_version = $this->profile_version ?: WC_UCP_SPEC_VERSION;
+
         $manifest = array(
             'ucp' => array(
-                'version'            => WC_UCP_SPEC_VERSION,
-                'spec'               => 'https://ucp.dev/' . WC_UCP_SPEC_VERSION . '/specification/overview/',
+                'version'            => $profile_version,
+                'spec'               => 'https://ucp.dev/' . $profile_version . '/specification/overview/',
                 'supported_versions' => $this->get_supported_versions(),
-                'services'           => $this->get_service_map( $rest_url ),
-                'capabilities'       => $this->get_capability_map(),
-                'payment_handlers'   => $this->get_payment_handler_map(),
+                'services'           => $this->get_service_map( $rest_url, $profile_version ),
+                'capabilities'       => $this->get_capability_map( $profile_version ),
+                'payment_handlers'   => $this->get_payment_handler_map( $profile_version ),
             ),
             'business' => array(
                 'name' => get_bloginfo( 'name' ),
@@ -150,10 +174,11 @@ class WC_UCP_Discovery {
      * @return array
      */
     private function get_supported_versions() {
-        $current_profile = home_url( '/.well-known/ucp' );
+        $base = trailingslashit( home_url( '/.well-known/ucp' ) );
 
         $versions = array(
-            WC_UCP_SPEC_VERSION => $current_profile,
+            'draft'              => $base . 'draft',
+            WC_UCP_SPEC_VERSION => $base . WC_UCP_SPEC_VERSION,
         );
 
         return apply_filters( 'wc_ucp_supported_versions', $versions );
@@ -165,26 +190,25 @@ class WC_UCP_Discovery {
      * @param string $rest_url Base REST URL.
      * @return array
      */
-    private function get_service_map( $rest_url ) {
-        $version = WC_UCP_SPEC_VERSION;
-        $spec    = 'https://ucp.dev/' . $version . '/specification/overview/';
+    private function get_service_map( $rest_url, $version ) {
+        $spec = 'https://ucp.dev/' . $version . '/specification/overview/';
         $rest    = untrailingslashit( $rest_url );
 
         $services = array(
             'dev.ucp.shopping' => array(
                 array(
-                    'version'  => $version,
-                    'spec'     => $spec,
-                    'transport'=> 'rest',
-                    'endpoint' => $rest,
-                    'schema'   => 'https://ucp.dev/services/shopping/rest.openrpc.json',
+                    'version'   => $version,
+                    'spec'      => $spec,
+                    'transport' => 'rest',
+                    'endpoint'  => $rest,
+                    'schema'    => 'https://ucp.dev/services/shopping/rest.openrpc.json',
                 ),
                 array(
-                    'version'  => $version,
-                    'spec'     => $spec,
-                    'transport'=> 'mcp',
-                    'endpoint' => $rest . '/mcp',
-                    'schema'   => 'https://ucp.dev/services/shopping/openrpc.json',
+                    'version'   => $version,
+                    'spec'      => $spec,
+                    'transport' => 'mcp',
+                    'endpoint'  => $rest . '/mcp',
+                    'schema'    => 'https://ucp.dev/services/shopping/openrpc.json',
                 ),
             ),
         );
@@ -197,14 +221,13 @@ class WC_UCP_Discovery {
      *
      * @return array
      */
-    private function get_capability_map() {
-        $version = WC_UCP_SPEC_VERSION;
+    private function get_capability_map( $version ) {
 
         $capabilities = array(
             'dev.ucp.shopping.checkout' => array(
                 array(
                     'version' => $version,
-                    'spec'    => 'https://ucp.dev/' . $version . '/specification/checkout-rest/',
+                    'spec'    => 'https://ucp.dev/' . $version . '/specification/checkout',
                     'schema'  => 'https://ucp.dev/' . $version . '/schemas/shopping/checkout.json',
                 ),
             ),
@@ -218,6 +241,9 @@ class WC_UCP_Discovery {
                         'allows_multi_destination' => array(
                             'shipping' => false,
                         ),
+                        'allows_method_combinations' => array(
+                            array( 'shipping' ),
+                        ),
                     ),
                 ),
             ),
@@ -227,6 +253,9 @@ class WC_UCP_Discovery {
                     'spec'    => 'https://ucp.dev/' . $version . '/specification/discount',
                     'schema'  => 'https://ucp.dev/' . $version . '/schemas/shopping/discount.json',
                     'extends' => 'dev.ucp.shopping.checkout',
+                    'config'  => array(
+                        'allows_stackable' => false,
+                    ),
                 ),
             ),
             'dev.ucp.shopping.order' => array(
@@ -246,7 +275,7 @@ class WC_UCP_Discovery {
      *
      * @return array
      */
-    private function get_payment_handler_map() {
+    private function get_payment_handler_map( $version ) {
         $handlers = array();
 
         if ( ! function_exists( 'WC' ) ) {
@@ -267,9 +296,12 @@ class WC_UCP_Discovery {
             if ( isset( $gateway_map[ $gateway_id ] ) ) {
                 $mapped  = $gateway_map[ $gateway_id ];
                 $handler = array(
-                    'id'   => $mapped['id'],
-                    'type' => $mapped['type'],
-                    'spec' => 'https://ucp.dev/payment-handlers/' . $mapped['id'],
+                    'id'      => $mapped['id'],
+                    'type'    => $mapped['type'],
+                    'version' => $version,
+                    'spec'    => 'https://ucp.dev/payment-handlers/' . $mapped['id'],
+                    'schema'  => 'https://ucp.dev/payment-handlers/' . $mapped['id'] . '/config.json',
+                    'config'  => array(),
                 );
 
                 $handlers[ $mapped['id'] ][] = $handler;
@@ -278,9 +310,12 @@ class WC_UCP_Discovery {
 
         if ( empty( $handlers ) ) {
             $handlers['manual'][] = array(
-                'id'   => 'manual',
-                'type' => 'escalation',
-                'spec' => site_url( '/checkout/' ),
+                'id'      => 'manual',
+                'type'    => 'escalation',
+                'version' => $version,
+                'spec'    => site_url( '/checkout/' ),
+                'schema'  => '',
+                'config'  => array(),
             );
         }
 

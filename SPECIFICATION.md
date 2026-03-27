@@ -22,7 +22,8 @@ capabilities, extensions, payment handlers, and transports.
     "version": "2026-01-23",
     "spec": "https://ucp.dev/2026-01-23/specification/overview/",
     "supported_versions": {
-      "2026-01-23": "https://example.com/.well-known/ucp"
+      "draft": "https://example.com/.well-known/ucp/draft",
+      "2026-01-23": "https://example.com/.well-known/ucp/2026-01-23"
     },
     "services": {
       "dev.ucp.shopping": [
@@ -79,7 +80,10 @@ capabilities, extensions, payment handlers, and transports.
         {
           "id": "stripe",
           "type": "psp",
-          "spec": "https://ucp.dev/payment-handlers/stripe"
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/payment-handlers/stripe",
+          "schema": "https://ucp.dev/payment-handlers/stripe/config.json",
+          "config": {}
         }
       ]
     }
