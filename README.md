@@ -1,7 +1,7 @@
 # WooCommerce UCP - Universal Commerce Protocol
 
-**Contributors:** Eduardo Arana & Soda
-**License:** GPL-2.0-or-later
+**Developers:** Eduardo Arana and Soda 🥤
+**License:** MIT
 **Requires WordPress:** 6.0+
 **Requires WooCommerce:** 7.0+
 **Requires PHP:** 7.4+
