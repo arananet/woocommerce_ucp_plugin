@@ -47,6 +47,7 @@ class WC_UCP_Admin {
      */
     public function update_settings() {
         woocommerce_update_options( $this->get_settings() );
+        flush_rewrite_rules();
     }
 
     /**
@@ -256,7 +257,10 @@ class WC_UCP_Admin {
                     if (response.success) {
                         $('#ucp-new-key-value').text(response.data.key);
                         $('#ucp-new-key-result').show();
-                        location.reload();
+                        // Clear form fields
+                        $('#ucp-key-label').val('');
+                        $('#ucp-key-customer').val('0');
+                        // Note: Table will be updated on next page load
                     } else {
                         alert(response.data || 'Error generating key.');
                     }

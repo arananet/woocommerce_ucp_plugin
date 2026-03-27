@@ -11,9 +11,18 @@ defined( 'ABSPATH' ) || exit;
 class WC_UCP_Discovery {
 
     public function __construct() {
-        add_action( 'init', array( $this, 'add_rewrite_rules' ) );
+        add_action( 'init', array( $this, 'maybe_add_rewrite_rules' ) );
         add_filter( 'query_vars', array( $this, 'add_query_vars' ) );
         add_action( 'template_redirect', array( $this, 'handle_discovery_request' ) );
+    }
+
+    /**
+     * Register rewrite rules for /.well-known/ucp if UCP is enabled.
+     */
+    public function maybe_add_rewrite_rules() {
+        if ( 'yes' === get_option( 'wc_ucp_enabled', 'yes' ) ) {
+            $this->add_rewrite_rules();
+        }
     }
 
     /**
@@ -44,6 +53,12 @@ class WC_UCP_Discovery {
     public function handle_discovery_request() {
         if ( ! get_query_var( 'wc_ucp_discovery' ) ) {
             return;
+        }
+
+        // Check if UCP is enabled.
+        if ( 'yes' !== get_option( 'wc_ucp_enabled', 'yes' ) ) {
+            status_header( 404 );
+            exit;
         }
 
         $manifest = $this->build_manifest();
