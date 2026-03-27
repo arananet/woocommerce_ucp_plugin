@@ -18,43 +18,78 @@ capabilities, extensions, payment handlers, and transports.
 
 ```json
 {
-  "profile": {
-    "ucp": {
-      "version": "2026-01-23",
-      "spec": "https://ucp.dev/2026-01-23/specification/overview/"
+  "ucp": {
+    "version": "2026-01-23",
+    "spec": "https://ucp.dev/2026-01-23/specification/overview/",
+    "supported_versions": {
+      "2026-01-23": "https://example.com/.well-known/ucp"
     },
-    "business": {
-      "name": "Store Name",
-      "url": "https://example.com"
+    "services": {
+      "dev.ucp.shopping": [
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/overview/",
+          "transport": "rest",
+          "endpoint": "https://example.com/wp-json/ucp/v1",
+          "schema": "https://ucp.dev/services/shopping/rest.openrpc.json"
+        },
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/overview/",
+          "transport": "mcp",
+          "endpoint": "https://example.com/wp-json/ucp/v1/mcp",
+          "schema": "https://ucp.dev/services/shopping/openrpc.json"
+        }
+      ]
     },
-    "services": [
-      {
-        "id": "dev.ucp.shopping",
-        "transports": [
-          { "type": "rest", "endpoint": "https://example.com/wp-json/ucp/v1" },
-          { "type": "mcp", "endpoint": "https://example.com/wp-json/ucp/v1/mcp" }
-        ],
-        "capabilities": [
-          {
-            "id": "dev.ucp.shopping.checkout",
-            "version": "2026-01-23",
-            "spec": "https://ucp.dev/2026-01-23/specification/checkout-rest/",
-            "schema": "https://ucp.dev/schemas/shopping/checkout.json"
-          }
-        ],
-        "extensions": [
-          { "id": "dev.ucp.shopping.fulfillment", "extends": "dev.ucp.shopping.checkout" },
-          { "id": "dev.ucp.shopping.discount", "extends": "dev.ucp.shopping.checkout" },
-          { "id": "dev.ucp.shopping.order" }
-        ],
-        "payment_handlers": [
-          { "id": "stripe", "type": "psp" }
-        ]
-      }
-    ],
-    "authentication": {
-      "methods": ["api_key", "oauth2"]
+    "capabilities": {
+      "dev.ucp.shopping.checkout": [
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/checkout-rest/",
+          "schema": "https://ucp.dev/2026-01-23/schemas/shopping/checkout.json"
+        }
+      ],
+      "dev.ucp.shopping.fulfillment": [
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/fulfillment",
+          "schema": "https://ucp.dev/2026-01-23/schemas/shopping/fulfillment.json",
+          "extends": "dev.ucp.shopping.checkout"
+        }
+      ],
+      "dev.ucp.shopping.discount": [
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/discount",
+          "schema": "https://ucp.dev/2026-01-23/schemas/shopping/discount.json",
+          "extends": "dev.ucp.shopping.checkout"
+        }
+      ],
+      "dev.ucp.shopping.order": [
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/order",
+          "schema": "https://ucp.dev/2026-01-23/schemas/shopping/order.json"
+        }
+      ]
+    },
+    "payment_handlers": {
+      "stripe": [
+        {
+          "id": "stripe",
+          "type": "psp",
+          "spec": "https://ucp.dev/payment-handlers/stripe"
+        }
+      ]
     }
+  },
+  "business": {
+    "name": "Store Name",
+    "url": "https://example.com"
+  },
+  "authentication": {
+    "methods": ["api_key", "oauth2"]
   }
 }
 ```

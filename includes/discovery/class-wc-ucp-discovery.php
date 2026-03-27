@@ -125,67 +125,116 @@ class WC_UCP_Discovery {
         $site_url = site_url();
         $rest_url = rest_url( 'ucp/v1' );
 
-        $profile = array(
-            'ucp'      => array(
-                'version' => WC_UCP_SPEC_VERSION,
-                'spec'    => 'https://ucp.dev/' . WC_UCP_SPEC_VERSION . '/specification/overview/',
+        $manifest = array(
+            'ucp' => array(
+                'version'            => WC_UCP_SPEC_VERSION,
+                'spec'               => 'https://ucp.dev/' . WC_UCP_SPEC_VERSION . '/specification/overview/',
+                'supported_versions' => $this->get_supported_versions(),
+                'services'           => $this->get_service_map( $rest_url ),
+                'capabilities'       => $this->get_capability_map(),
+                'payment_handlers'   => $this->get_payment_handler_map(),
             ),
             'business' => array(
                 'name' => get_bloginfo( 'name' ),
                 'url'  => $site_url,
             ),
-            'services' => array(
-                array(
-                    'id'         => 'dev.ucp.shopping',
-                    'transports' => $this->get_transports( $rest_url ),
-                    'capabilities' => $this->get_capabilities(),
-                    'extensions'   => $this->get_extensions(),
-                    'payment_handlers' => $this->get_payment_handlers(),
-                ),
-            ),
             'authentication' => $this->get_authentication( $rest_url ),
-        );
-
-        $manifest = array(
-            'profile' => $profile,
         );
 
         return apply_filters( 'wc_ucp_discovery_manifest', $manifest );
     }
 
     /**
-     * Get available transport configurations.
+     * Map the supported UCP versions to manifests.
+     *
+     * @return array
+     */
+    private function get_supported_versions() {
+        $current_profile = home_url( '/.well-known/ucp' );
+
+        $versions = array(
+            WC_UCP_SPEC_VERSION => $current_profile,
+        );
+
+        return apply_filters( 'wc_ucp_supported_versions', $versions );
+    }
+
+    /**
+     * Build the services map, keyed by service id.
      *
      * @param string $rest_url Base REST URL.
      * @return array
      */
-    private function get_transports( $rest_url ) {
-        $transports = array(
-            array(
-                'type'     => 'rest',
-                'endpoint' => $rest_url,
-            ),
-            array(
-                'type'     => 'mcp',
-                'endpoint' => $rest_url . '/mcp',
+    private function get_service_map( $rest_url ) {
+        $version = WC_UCP_SPEC_VERSION;
+        $spec    = 'https://ucp.dev/' . $version . '/specification/overview/';
+        $rest    = untrailingslashit( $rest_url );
+
+        $services = array(
+            'dev.ucp.shopping' => array(
+                array(
+                    'version'  => $version,
+                    'spec'     => $spec,
+                    'transport'=> 'rest',
+                    'endpoint' => $rest,
+                    'schema'   => 'https://ucp.dev/services/shopping/rest.openrpc.json',
+                ),
+                array(
+                    'version'  => $version,
+                    'spec'     => $spec,
+                    'transport'=> 'mcp',
+                    'endpoint' => $rest . '/mcp',
+                    'schema'   => 'https://ucp.dev/services/shopping/openrpc.json',
+                ),
             ),
         );
 
-        return $transports;
+        return apply_filters( 'wc_ucp_services', $services );
     }
 
     /**
-     * Get supported capabilities.
+     * Build the capability map keyed by capability id.
      *
      * @return array
      */
-    private function get_capabilities() {
+    private function get_capability_map() {
+        $version = WC_UCP_SPEC_VERSION;
+
         $capabilities = array(
-            array(
-                'id'      => 'dev.ucp.shopping.checkout',
-                'version' => WC_UCP_SPEC_VERSION,
-                'spec'    => 'https://ucp.dev/' . WC_UCP_SPEC_VERSION . '/specification/checkout-rest/',
-                'schema'  => 'https://ucp.dev/schemas/shopping/checkout.json',
+            'dev.ucp.shopping.checkout' => array(
+                array(
+                    'version' => $version,
+                    'spec'    => 'https://ucp.dev/' . $version . '/specification/checkout-rest/',
+                    'schema'  => 'https://ucp.dev/' . $version . '/schemas/shopping/checkout.json',
+                ),
+            ),
+            'dev.ucp.shopping.fulfillment' => array(
+                array(
+                    'version' => $version,
+                    'spec'    => 'https://ucp.dev/' . $version . '/specification/fulfillment',
+                    'schema'  => 'https://ucp.dev/' . $version . '/schemas/shopping/fulfillment.json',
+                    'extends' => 'dev.ucp.shopping.checkout',
+                    'config'  => array(
+                        'allows_multi_destination' => array(
+                            'shipping' => false,
+                        ),
+                    ),
+                ),
+            ),
+            'dev.ucp.shopping.discount' => array(
+                array(
+                    'version' => $version,
+                    'spec'    => 'https://ucp.dev/' . $version . '/specification/discount',
+                    'schema'  => 'https://ucp.dev/' . $version . '/schemas/shopping/discount.json',
+                    'extends' => 'dev.ucp.shopping.checkout',
+                ),
+            ),
+            'dev.ucp.shopping.order' => array(
+                array(
+                    'version' => $version,
+                    'spec'    => 'https://ucp.dev/' . $version . '/specification/order',
+                    'schema'  => 'https://ucp.dev/' . $version . '/schemas/shopping/order.json',
+                ),
             ),
         );
 
@@ -193,37 +242,11 @@ class WC_UCP_Discovery {
     }
 
     /**
-     * Get supported extensions.
-     *
-     * @return array
-     */
-    private function get_extensions() {
-        $extensions = array(
-            array(
-                'id'      => 'dev.ucp.shopping.fulfillment',
-                'extends' => 'dev.ucp.shopping.checkout',
-                'version' => WC_UCP_SPEC_VERSION,
-            ),
-            array(
-                'id'      => 'dev.ucp.shopping.discount',
-                'extends' => 'dev.ucp.shopping.checkout',
-                'version' => WC_UCP_SPEC_VERSION,
-            ),
-            array(
-                'id'      => 'dev.ucp.shopping.order',
-                'version' => WC_UCP_SPEC_VERSION,
-            ),
-        );
-
-        return apply_filters( 'wc_ucp_extensions', $extensions );
-    }
-
-    /**
      * Get payment handlers from active WooCommerce gateways.
      *
      * @return array
      */
-    private function get_payment_handlers() {
+    private function get_payment_handler_map() {
         $handlers = array();
 
         if ( ! function_exists( 'WC' ) ) {
@@ -240,22 +263,21 @@ class WC_UCP_Discovery {
             'woocommerce_payments'    => array( 'id' => 'woocommerce-payments', 'type' => 'psp' ),
         );
 
-        $seen = array();
-
         foreach ( $gateways as $gateway_id => $gateway ) {
-            if ( isset( $gateway_map[ $gateway_id ] ) && ! isset( $seen[ $gateway_map[ $gateway_id ]['id'] ] ) ) {
-                $mapped = $gateway_map[ $gateway_id ];
-                $handlers[] = array(
+            if ( isset( $gateway_map[ $gateway_id ] ) ) {
+                $mapped  = $gateway_map[ $gateway_id ];
+                $handler = array(
                     'id'   => $mapped['id'],
                     'type' => $mapped['type'],
                     'spec' => 'https://ucp.dev/payment-handlers/' . $mapped['id'],
                 );
-                $seen[ $mapped['id'] ] = true;
+
+                $handlers[ $mapped['id'] ][] = $handler;
             }
         }
 
         if ( empty( $handlers ) ) {
-            $handlers[] = array(
+            $handlers['manual'][] = array(
                 'id'   => 'manual',
                 'type' => 'escalation',
                 'spec' => site_url( '/checkout/' ),
