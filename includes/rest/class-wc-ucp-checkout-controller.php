@@ -511,6 +511,7 @@ class WC_UCP_Checkout_Controller extends WC_UCP_REST_Controller {
 		}
 
 		$this->maybe_populate_shipping_from_billing( $order );
+		$this->maybe_assign_default_shipping_method( $order );
 	}
 
 	/**
@@ -571,6 +572,94 @@ class WC_UCP_Checkout_Controller extends WC_UCP_REST_Controller {
 		if ( $order->get_billing_country() ) {
 			$order->set_shipping_country( $order->get_billing_country() );
 		}
+	}
+
+	/**
+	 * Ensure a shipping rate is attached once an address exists.
+	 *
+	 * @param WC_Order $order WooCommerce order.
+	 */
+	private function maybe_assign_default_shipping_method( $order ) {
+		if ( ! $order->needs_shipping_address() ) {
+			return;
+		}
+
+		if ( ! empty( $order->get_shipping_methods() ) ) {
+			return;
+		}
+
+		if ( empty( $order->get_shipping_country() ) || empty( $order->get_shipping_postcode() ) ) {
+			return;
+		}
+
+		$package = array(
+			'destination' => array(
+				'country'  => $order->get_shipping_country(),
+				'state'    => $order->get_shipping_state(),
+				'postcode' => $order->get_shipping_postcode(),
+				'city'     => $order->get_shipping_city(),
+			),
+			'contents'        => array(),
+			'contents_cost'   => 0,
+			'applied_coupons' => array(),
+		);
+
+		foreach ( $order->get_items() as $item ) {
+			$product = $item->get_product();
+			if ( $product && $product->needs_shipping() ) {
+				$package['contents'][] = array(
+					'data'     => $product,
+					'quantity' => $item->get_quantity(),
+				);
+				$package['contents_cost'] += floatval( $item->get_subtotal() );
+			}
+		}
+
+		if ( empty( $package['contents'] ) ) {
+			return;
+		}
+
+		$shipping = WC()->shipping();
+		if ( ! $shipping ) {
+			return;
+		}
+
+		$had_session = isset( WC()->session ) && WC()->session;
+		if ( ! $had_session ) {
+			WC()->session = new WC_UCP_Runtime_Session();
+		}
+
+		try {
+			$shipping->calculate_shipping( array( $package ) );
+			$packages = $shipping->get_packages();
+			if ( empty( $packages[0]['rates'] ) ) {
+				return;
+			}
+
+			$rate = reset( $packages[0]['rates'] );
+
+			foreach ( $order->get_items( 'shipping' ) as $item_id => $item ) {
+				$order->remove_item( $item_id );
+			}
+
+			$shipping_item = new WC_Order_Item_Shipping();
+			$shipping_item->set_method_title( $rate->get_label() );
+			$shipping_item->set_method_id( $rate->get_method_id() );
+			$shipping_item->set_instance_id( $rate->get_instance_id() );
+			$shipping_item->set_total( $rate->get_cost() );
+			$order->add_item( $shipping_item );
+		} catch ( Exception $e ) {
+			if ( isset( WC_UCP_Plugin::instance()->logger ) ) {
+				WC_UCP_Plugin::instance()->logger->warning( 'Unable to assign default shipping method.', array( 'error' => $e->getMessage(), 'order_id' => $order->get_id() ) );
+			}
+			return;
+		} finally {
+			if ( ! $had_session ) {
+				WC()->session = null;
+			}
+		}
+
+		$order->calculate_totals();
 	}
 
 	/**

@@ -101,20 +101,29 @@ class WC_UCP_Fulfillment {
             );
         }
 
-        $shipping = WC()->shipping();
-        if ( ! $shipping ) {
-            return new WP_Error( 'shipping_unavailable', 'Shipping calculation is not available.', array( 'status' => 500 ) );
-        }
+		$shipping = WC()->shipping();
+		if ( ! $shipping ) {
+			return new WP_Error( 'shipping_unavailable', 'Shipping calculation is not available.', array( 'status' => 500 ) );
+		}
 
-        try {
-            $shipping->calculate_shipping( array( $package ) );
-        } catch ( Exception $e ) {
-            return new WP_Error(
-                'shipping_calculation_failed',
-                sprintf( __( 'Unable to calculate shipping rates: %s', 'woocommerce-ucp' ), $e->getMessage() ),
-                array( 'status' => 500 )
-            );
-        }
+		$had_session = isset( WC()->session ) && WC()->session;
+		if ( ! $had_session ) {
+			WC()->session = new WC_UCP_Runtime_Session();
+		}
+
+		try {
+			$shipping->calculate_shipping( array( $package ) );
+		} catch ( Exception $e ) {
+			return new WP_Error(
+				'shipping_calculation_failed',
+				sprintf( __( 'Unable to calculate shipping rates: %s', 'woocommerce-ucp' ), $e->getMessage() ),
+				array( 'status' => 500 )
+			);
+		} finally {
+			if ( ! $had_session ) {
+				WC()->session = null;
+			}
+		}
         $packages = $shipping->get_packages();
 
         if ( ! empty( $packages[0]['rates'][ $rate_id ] ) ) {
