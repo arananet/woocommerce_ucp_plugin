@@ -322,6 +322,27 @@ endpoints. Required fields per the specification:
 | `totals` | object | Order totals (subtotal, shipping, tax, discount, total) |
 | `links` | object | Hypermedia links (self, continue_url) |
 
+### Address & Fulfillment Defaults
+
+To keep agent UX simple, the plugin layers a few automatic behaviors on top of
+the base specification:
+
+- **Billing → Shipping mirroring:** When the buyer only provides billing
+  details, WooCommerce still requires a shipping destination for physical
+  products. The controller copies the billing name/company/address into the
+  shipping fields as soon as postage is needed, ensuring fulfillment validation
+  can succeed without extra prompts.
+- **Default shipping selection:** After an address is known and at least one
+  rate is available, the first WooCommerce rate is attached to the order. This
+  keeps `fulfillment.methods[].groups[].selected_option_id` populated and lets
+  the session graduate to `ready_for_complete` even if the agent never sends a
+  manual selection.
+- **Headless shipping calculations:** REST/MCP calls run outside of a browser
+  session, so WooCommerce's native session handler may be absent. Before any
+  shipping calculation, the plugin boots a lightweight runtime session shim and
+  restores the previous `WC()->session` afterwards. This prevents `Call to a
+  member function get() on null` fatals while remaining stateless.
+
 ---
 
 ## 5. MCP Binding (Model Context Protocol)
