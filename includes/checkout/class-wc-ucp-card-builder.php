@@ -285,21 +285,30 @@ class WC_UCP_Card_Builder {
             return $options;
         }
 
-        $shipping = WC()->shipping();
-        if ( ! $shipping ) {
-            return $options;
-        }
+		$shipping = WC()->shipping();
+		if ( ! $shipping ) {
+			return $options;
+		}
 
-        try {
-            $shipping->calculate_shipping( array( $package ) );
-        } catch ( Exception $e ) {
-            if ( isset( WC_UCP_Plugin::instance()->logger ) ) {
-                WC_UCP_Plugin::instance()->logger->warning( 'Shipping calculation failed while building card.', array( 'error' => $e->getMessage() ) );
-            }
-            return $options;
-        }
+		$had_session = isset( WC()->session ) && WC()->session;
+		if ( ! $had_session ) {
+			WC()->session = new WC_UCP_Runtime_Session();
+		}
 
-        $packages = $shipping->get_packages();
+		try {
+			$shipping->calculate_shipping( array( $package ) );
+		} catch ( Exception $e ) {
+			if ( isset( WC_UCP_Plugin::instance()->logger ) ) {
+				WC_UCP_Plugin::instance()->logger->warning( 'Shipping calculation failed while building card.', array( 'error' => $e->getMessage() ) );
+			}
+			return $options;
+		} finally {
+			if ( ! $had_session ) {
+				WC()->session = null;
+			}
+		}
+
+		$packages = $shipping->get_packages();
 
         if ( ! empty( $packages[0]['rates'] ) ) {
             foreach ( $packages[0]['rates'] as $rate ) {
