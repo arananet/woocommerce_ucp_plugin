@@ -181,9 +181,36 @@ class WC_UCP_Validator {
      * @param array $address Raw address.
      * @return array
      */
-    public static function sanitize_address( $address ) {
-        $fields    = array( 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'company' );
-        $sanitized = array();
+	public static function sanitize_address( $address ) {
+		$aliases = array(
+			'street'        => 'address_1',
+			'street_1'      => 'address_1',
+			'street1'       => 'address_1',
+			'line1'         => 'address_1',
+			'address1'      => 'address_1',
+			'street_2'      => 'address_2',
+			'street2'       => 'address_2',
+			'line2'         => 'address_2',
+			'address2'      => 'address_2',
+			'postal_code'   => 'postcode',
+			'zip'           => 'postcode',
+			'zip_code'      => 'postcode',
+			'country_code'  => 'country',
+			'region'        => 'state',
+			'province'      => 'state',
+			'state_code'    => 'state',
+			'state_province'=> 'state',
+			'company_name'  => 'company',
+		);
+
+		foreach ( $aliases as $alias => $canonical ) {
+			if ( isset( $address[ $alias ] ) && empty( $address[ $canonical ] ) ) {
+				$address[ $canonical ] = $address[ $alias ];
+			}
+		}
+
+		$fields    = array( 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'company' );
+		$sanitized = array();
 
         foreach ( $fields as $field ) {
             if ( isset( $address[ $field ] ) ) {
