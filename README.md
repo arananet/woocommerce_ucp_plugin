@@ -7,6 +7,8 @@
 **Requires PHP:** 7.4+
 **UCP Spec Version:** 2026-01-23
 
+> **Disclaimer:** This project is an independent, community-driven plugin and has no affiliation with WooCommerce or Automattic.
+
 ## Description
 
 WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) for WooCommerce stores, enabling AI agents to discover, negotiate, and complete transactions with your store via standardized APIs.
