@@ -312,21 +312,34 @@ class WC_UCP_Discovery {
             'woocommerce_payments'    => array( 'id' => 'woocommerce-payments', 'type' => 'psp' ),
         );
 
-        foreach ( $gateways as $gateway_id => $gateway ) {
-            if ( isset( $gateway_map[ $gateway_id ] ) ) {
-                $mapped  = $gateway_map[ $gateway_id ];
-                $handler = array(
-                    'id'      => $mapped['id'],
-                    'type'    => $mapped['type'],
-                    'version' => $version,
-                    'spec'    => 'https://ucp.dev/payment-handlers/' . $mapped['id'],
-                    'schema'  => 'https://ucp.dev/payment-handlers/' . $mapped['id'] . '/config.json',
-                    'config'  => array(),
-                );
+		foreach ( $gateways as $gateway_id => $gateway ) {
+			if ( isset( $gateway_map[ $gateway_id ] ) ) {
+				$mapped  = $gateway_map[ $gateway_id ];
+				$handler = array(
+					'id'      => $mapped['id'],
+					'type'    => $mapped['type'],
+					'version' => $version,
+					'spec'    => 'https://ucp.dev/payment-handlers/' . $mapped['id'],
+					'schema'  => 'https://ucp.dev/payment-handlers/' . $mapped['id'] . '/config.json',
+					'config'  => array(),
+				);
 
-                $handlers[ $mapped['id'] ][] = $handler;
-            }
-        }
+				$handlers[ $mapped['id'] ][] = $handler;
+
+				if ( 'stripe' === $mapped['id'] && $this->is_stripe_google_pay_enabled() ) {
+					$handlers['com.google.pay'][] = array(
+						'id'      => 'gpay',
+						'type'    => 'psp',
+						'version' => $version,
+						'spec'    => 'https://pay.google.com/gp/p/ucp/' . $version . '/',
+						'schema'  => 'https://pay.google.com/gp/p/ucp/' . $version . '/schemas/config.json',
+						'config'  => array(
+							'powered_by' => 'stripe',
+						),
+					);
+				}
+			}
+		}
 
         if ( empty( $handlers ) ) {
             $handlers['manual'][] = array(
@@ -339,8 +352,27 @@ class WC_UCP_Discovery {
             );
         }
 
-        return apply_filters( 'wc_ucp_payment_handlers', $handlers );
-    }
+		return apply_filters( 'wc_ucp_payment_handlers', $handlers );
+	}
+
+	/**
+	 * Determine if Stripe Payment Request buttons (Google/Apple Pay) are enabled.
+	 *
+	 * @return bool
+	 */
+	private function is_stripe_google_pay_enabled() {
+		$stripe_settings = get_option( 'woocommerce_stripe_settings', array() );
+		if ( isset( $stripe_settings['payment_request'] ) && 'yes' === $stripe_settings['payment_request'] ) {
+			return true;
+		}
+
+		$wcpay_settings = get_option( 'woocommerce_woocommerce_payments_settings', array() );
+		if ( isset( $wcpay_settings['payment_request_enabled'] ) && 'yes' === $wcpay_settings['payment_request_enabled'] ) {
+			return true;
+		}
+
+		return false;
+	}
 
     /**
      * Get authentication configuration.
