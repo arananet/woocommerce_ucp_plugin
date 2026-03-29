@@ -66,6 +66,10 @@ WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) fo
 3. Go to WooCommerce > Settings > UCP to configure
 4. Generate API keys for your AI agent integrations
 
+### CDN / WAF Considerations
+
+If you proxy your store through a CDN or Web Application Firewall (Cloudflare, Fastly, etc.), make sure that requests to the REST namespace are **never cached** and that cookies are forwarded. In particular, `/wp-json/ucp/*` must reach WordPress with the `wordpress_logged_in_*` cookie intact so the OAuth authorize endpoint can detect logged-in users. Create a bypass rule for `https://<your-domain>/wp-json/*` (or Host = `<your-domain>`, Path starts with `/wp-json/`) and disable any “strip cookies” or login-challenge features for that route. Otherwise OAuth flows will loop on the login page and session-aware endpoints will fail.
+
 ## Sources
 
 - [UCP Specification](https://ucp.dev/specification/overview/)
