@@ -19,6 +19,10 @@ class WC_UCP_Admin {
         // AJAX handlers for API key management.
         add_action( 'wp_ajax_ucp_generate_api_key', array( $this, 'ajax_generate_api_key' ) );
         add_action( 'wp_ajax_ucp_revoke_api_key', array( $this, 'ajax_revoke_api_key' ) );
+
+        // AJAX handlers for OAuth client management.
+        add_action( 'wp_ajax_ucp_generate_oauth_client', array( $this, 'ajax_generate_oauth_client' ) );
+        add_action( 'wp_ajax_ucp_revoke_oauth_client', array( $this, 'ajax_revoke_oauth_client' ) );
     }
 
     /**
@@ -40,6 +44,9 @@ class WC_UCP_Admin {
 
         // API Keys section.
         $this->render_api_keys_section();
+
+        // OAuth clients section.
+        $this->render_oauth_clients_section();
     }
 
     /**
@@ -288,6 +295,133 @@ class WC_UCP_Admin {
     }
 
     /**
+     * Render OAuth clients management section.
+     */
+    private function render_oauth_clients_section() {
+        global $wpdb;
+
+        $clients = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}ucp_oauth_clients ORDER BY created_at DESC" );
+
+        ?>
+        <hr />
+        <h2><?php esc_html_e( 'OAuth 2.0 Clients', 'woocommerce-ucp' ); ?></h2>
+        <p><?php esc_html_e( 'Register OAuth clients so conversational agents can link customer identities via PKCE.', 'woocommerce-ucp' ); ?></p>
+
+        <table class="widefat striped" id="ucp-oauth-clients-table">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e( 'Name', 'woocommerce-ucp' ); ?></th>
+                    <th><?php esc_html_e( 'Client ID', 'woocommerce-ucp' ); ?></th>
+                    <th><?php esc_html_e( 'Redirect URIs', 'woocommerce-ucp' ); ?></th>
+                    <th><?php esc_html_e( 'Created', 'woocommerce-ucp' ); ?></th>
+                    <th><?php esc_html_e( 'Status', 'woocommerce-ucp' ); ?></th>
+                    <th><?php esc_html_e( 'Actions', 'woocommerce-ucp' ); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ( empty( $clients ) ) : ?>
+                    <tr><td colspan="6"><?php esc_html_e( 'No OAuth clients registered yet.', 'woocommerce-ucp' ); ?></td></tr>
+                <?php else : ?>
+                    <?php foreach ( $clients as $client ) : ?>
+                        <tr>
+                            <td><?php echo esc_html( $client->name ); ?></td>
+                            <td><code><?php echo esc_html( $client->client_id ); ?></code></td>
+                            <td>
+                                <?php
+                                $uris = json_decode( $client->redirect_uris, true );
+                                if ( is_array( $uris ) ) {
+                                    foreach ( $uris as $uri ) {
+                                        echo '<div>' . esc_html( $uri ) . '</div>';
+                                    }
+                                }
+                                ?>
+                            </td>
+                            <td><?php echo esc_html( $client->created_at ); ?></td>
+                            <td><?php echo $client->revoked ? '<span style="color:red;">' . esc_html__( 'Revoked', 'woocommerce-ucp' ) . '</span>' : '<span style="color:green;">' . esc_html__( 'Active', 'woocommerce-ucp' ) . '</span>'; ?></td>
+                            <td>
+                                <?php if ( ! $client->revoked ) : ?>
+                                    <button type="button" class="button ucp-revoke-client" data-client-id="<?php echo absint( $client->id ); ?>"><?php esc_html_e( 'Revoke', 'woocommerce-ucp' ); ?></button>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+
+        <h3><?php esc_html_e( 'Register New OAuth Client', 'woocommerce-ucp' ); ?></h3>
+        <table class="form-table">
+            <tr>
+                <th><label for="ucp-client-name"><?php esc_html_e( 'Name', 'woocommerce-ucp' ); ?></label></th>
+                <td><input type="text" id="ucp-client-name" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Telegram Agent', 'woocommerce-ucp' ); ?>" /></td>
+            </tr>
+            <tr>
+                <th><label for="ucp-client-redirects"><?php esc_html_e( 'Redirect URI(s)', 'woocommerce-ucp' ); ?></label></th>
+                <td>
+                    <textarea id="ucp-client-redirects" class="large-text" rows="3" placeholder="<?php esc_attr_e( 'One URL per line, e.g., https://bot.example.com/oauth/callback', 'woocommerce-ucp' ); ?>"></textarea>
+                </td>
+            </tr>
+        </table>
+        <p>
+            <button type="button" class="button button-primary" id="ucp-generate-client"><?php esc_html_e( 'Create OAuth Client', 'woocommerce-ucp' ); ?></button>
+        </p>
+        <div id="ucp-new-client-result" style="display:none; background:#f0f0f1; padding:12px; margin-top:12px; border-left:4px solid #00a32a;">
+            <strong><?php esc_html_e( 'New Client Credentials (copy now — client secret will not be shown again):', 'woocommerce-ucp' ); ?></strong>
+            <p><?php esc_html_e( 'Client ID:', 'woocommerce-ucp' ); ?> <code id="ucp-new-client-id"></code></p>
+            <p><?php esc_html_e( 'Client Secret:', 'woocommerce-ucp' ); ?> <code id="ucp-new-client-secret"></code></p>
+        </div>
+
+        <script>
+        jQuery(function($) {
+            $('#ucp-generate-client').on('click', function() {
+                var name = $('#ucp-client-name').val();
+                var redirects = $('#ucp-client-redirects').val();
+                if (!name || !redirects) {
+                    alert('<?php echo esc_js( __( 'Name and redirect URI are required.', 'woocommerce-ucp' ) ); ?>');
+                    return;
+                }
+
+                $.post(ajaxurl, {
+                    action: 'ucp_generate_oauth_client',
+                    name: name,
+                    redirect_uris: redirects,
+                    _wpnonce: '<?php echo esc_js( wp_create_nonce( 'ucp_oauth_client' ) ); ?>'
+                }, function(response) {
+                    if (response.success) {
+                        $('#ucp-new-client-id').text(response.data.client_id);
+                        $('#ucp-new-client-secret').text(response.data.client_secret);
+                        $('#ucp-new-client-result').show();
+                        $('#ucp-client-name').val('');
+                        $('#ucp-client-redirects').val('');
+                    } else {
+                        alert(response.data || 'Error creating client.');
+                    }
+                });
+            });
+
+            $('.ucp-revoke-client').on('click', function() {
+                if (!confirm('<?php echo esc_js( __( 'Revoke this OAuth client?', 'woocommerce-ucp' ) ); ?>')) {
+                    return;
+                }
+
+                $.post(ajaxurl, {
+                    action: 'ucp_revoke_oauth_client',
+                    client_id: $(this).data('client-id'),
+                    _wpnonce: '<?php echo esc_js( wp_create_nonce( 'ucp_oauth_client' ) ); ?>'
+                }, function(response) {
+                    if (response.success) {
+                        location.reload();
+                    } else {
+                        alert(response.data || 'Error revoking client.');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+    }
+
+    /**
      * Add API keys subpage under WooCommerce.
      */
     public function add_api_keys_page() {
@@ -334,6 +468,90 @@ class WC_UCP_Admin {
         }
 
         WC_UCP_API_Keys::revoke( $key_id );
+
+        wp_send_json_success();
+    }
+
+    /**
+     * AJAX: Generate OAuth client credentials.
+     */
+    public function ajax_generate_oauth_client() {
+        check_ajax_referer( 'ucp_oauth_client' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Insufficient permissions.' );
+        }
+
+        $name           = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
+        $redirect_input = wp_unslash( $_POST['redirect_uris'] ?? '' );
+        $redirect_lines = array_filter( array_map( 'trim', preg_split( '/\r?\n/', $redirect_input ) ) );
+
+        if ( empty( $name ) ) {
+            wp_send_json_error( __( 'Name is required.', 'woocommerce-ucp' ) );
+        }
+
+        if ( empty( $redirect_lines ) ) {
+            wp_send_json_error( __( 'At least one redirect URI is required.', 'woocommerce-ucp' ) );
+        }
+
+        foreach ( $redirect_lines as $uri ) {
+            if ( ! filter_var( $uri, FILTER_VALIDATE_URL ) ) {
+                wp_send_json_error( sprintf( __( 'Invalid redirect URI: %s', 'woocommerce-ucp' ), esc_html( $uri ) ) );
+            }
+        }
+
+        $client_id     = 'ucp_' . wp_generate_password( 20, false, false );
+        $client_secret = wp_generate_password( 48, false, false );
+        $secret_hash   = hash( 'sha256', $client_secret );
+
+        global $wpdb;
+        $inserted = $wpdb->insert(
+            $wpdb->prefix . 'ucp_oauth_clients',
+            array(
+                'client_id'         => $client_id,
+                'client_secret_hash'=> $secret_hash,
+                'name'              => $name,
+                'redirect_uris'     => wp_json_encode( array_values( $redirect_lines ) ),
+                'created_at'        => current_time( 'mysql' ),
+                'revoked'           => 0,
+            ),
+            array( '%s', '%s', '%s', '%s', '%s', '%d' )
+        );
+
+        if ( ! $inserted ) {
+            wp_send_json_error( __( 'Failed to create OAuth client.', 'woocommerce-ucp' ) );
+        }
+
+        wp_send_json_success( array(
+            'client_id'     => $client_id,
+            'client_secret' => $client_secret,
+        ) );
+    }
+
+    /**
+     * AJAX: Revoke OAuth client.
+     */
+    public function ajax_revoke_oauth_client() {
+        check_ajax_referer( 'ucp_oauth_client' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Insufficient permissions.' );
+        }
+
+        $client_row_id = absint( $_POST['client_id'] ?? 0 );
+
+        if ( ! $client_row_id ) {
+            wp_send_json_error( 'Invalid client ID.' );
+        }
+
+        global $wpdb;
+        $wpdb->update(
+            $wpdb->prefix . 'ucp_oauth_clients',
+            array( 'revoked' => 1 ),
+            array( 'id' => $client_row_id ),
+            array( '%d' ),
+            array( '%d' )
+        );
 
         wp_send_json_success();
     }

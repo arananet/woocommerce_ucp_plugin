@@ -21,6 +21,7 @@ WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) fo
 - **AP2 Payment Support** — Agent Payments Protocol mandate verification with Stripe/PayPal bridge
 - **OAuth 2.0 Identity Linking** — RFC 6749 with PKCE (RFC 7636) support
 - **API Key Authentication** — Simple key-based auth for agent integrations
+- **OAuth Client Management** — Point-and-click UI to register clients and redirect URIs
 - **Product Catalog** — AI-optimized product browsing with search, filters, and variations
 - **Customer Management** — Lookup and registration (only registered users can purchase)
 - **Rate Limiting** — Configurable per-key and per-IP rate limits
