@@ -82,6 +82,9 @@ class WC_UCP_Plugin {
         $customer_controller = new WC_UCP_Customer_Controller();
         $customer_controller->register_routes();
 
+        $payments_controller = new WC_UCP_Payments_Controller();
+        $payments_controller->register_routes();
+
         $mcp_handler = new WC_UCP_MCP_Handler();
         $mcp_handler->register_routes();
 

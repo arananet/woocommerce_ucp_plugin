@@ -97,7 +97,7 @@ MUST NOT require duplicating business logic.
 | Controllers (rest/, mcp/) | HTTP/RPC request handling, response formatting |
 | Checkout (checkout/) | Session state machine, UCP Card building, fulfillment |
 | Auth (auth/) | Authentication, authorization, token management |
-| Payments (payments/) | AP2 mandate verification, PSP gateway bridging |
+| Payments (payments/) | AP2 mandate verification, PSP gateway bridging, delegated PSP intent helper |
 | Security (security/) | Validation, rate limiting, logging |
 | Discovery (discovery/) | Manifest generation, capability negotiation |
 | Admin (admin/) | Settings UI, API key management |

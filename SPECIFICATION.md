@@ -176,6 +176,45 @@ Finalize the checkout and place the order. Only valid when status is
 
 **Response (200):** UCP Card with status `completed`
 
+#### POST /payments/intent — Delegated PSP Token
+
+Creates a short-lived payment credential (currently Stripe PaymentIntent) using
+the merchant's installed WooCommerce gateway. Agents can call this endpoint
+after collecting shipping info to obtain a token they can immediately pass to
+`/checkout-sessions/{id}/complete`.
+
+**Request Body**
+
+```json
+{
+  "amount": 129.99,
+  "currency": "USD",
+  "gateway": "stripe" // optional when only one supported gateway is active
+}
+```
+
+**Response (201)**
+
+```json
+{
+  "payment_method": "stripe",
+  "payment_token": {
+    "gateway": "stripe",
+    "value": "pi_3OyUWZ...",
+    "intent_id": "pi_3OyUWZ..."
+  },
+  "client_secret": "pi_3OyUWZ_secret_...",
+  "status": "requires_payment_method",
+  "expires_at": 1774970400
+}
+```
+
+Agents MUST pass the `payment_token` object verbatim in the `payment`
+payload for `/checkout-sessions/{id}/complete`. WooCommerce UCP stores the
+intent ID (`_stripe_intent_id`) and lets the native Stripe gateway capture it.
+Future revisions will include PayPal and WooCommerce Payments under the same
+endpoint signature.
+
 #### POST /checkout-sessions/{id}/cancel — Cancel Session
 
 Cancel a checkout session. Valid from any non-terminal status.

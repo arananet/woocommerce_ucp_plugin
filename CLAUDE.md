@@ -19,6 +19,7 @@ includes/
   class-wc-ucp-activator.php → DB table creation (5 tables)
   discovery/                  → /.well-known/ucp manifest + negotiation
   rest/                       → REST controllers (checkout, products, customers)
+                               + payments controller for delegated PSP tokens
   mcp/                        → JSON-RPC 2.0 handler (wraps REST)
   checkout/                   → Session state machine, UCP Card builder, fulfillment
   auth/                       → API key + OAuth 2.0 (PKCE, token rotation)
@@ -53,6 +54,7 @@ admin/                        → WooCommerce settings tab + API key UI
 | PUT | `/ucp/v1/checkout-sessions/{id}` | Required | Update session |
 | POST | `/ucp/v1/checkout-sessions/{id}/complete` | Required | Complete order |
 | POST | `/ucp/v1/checkout-sessions/{id}/cancel` | Required | Cancel session |
+| POST | `/ucp/v1/payments/intent` | Required | Mint delegated PSP intent/token |
 | GET | `/ucp/v1/products` | Public* | List products |
 | GET | `/ucp/v1/products/{id}` | Public* | Get product |
 | POST | `/ucp/v1/customers/lookup` | Required | Check customer exists |

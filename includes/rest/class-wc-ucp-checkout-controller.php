@@ -385,7 +385,7 @@ class WC_UCP_Checkout_Controller extends WC_UCP_REST_Controller {
         }
 
         // Process payment via AP2 if mandate is present.
-        $payment_data = $request->get_json_params();
+        $payment_data   = WC_UCP_Payment_Utils::normalize_payment_payload( $request->get_json_params() );
         $payment_result = $this->process_payment( $order, $payment_data );
 
         if ( is_wp_error( $payment_result ) ) {

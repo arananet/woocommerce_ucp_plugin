@@ -17,6 +17,7 @@ WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) fo
 
 - **UCP Discovery** at `/.well-known/ucp` — AI agents auto-discover your store's capabilities
 - **REST API** — Full checkout session lifecycle (create, update, complete, cancel)
+- **Delegated PSP Tokens** — `/wp-json/ucp/v1/payments/intent` generates short-lived Stripe intents so agents can finish checkout without storing cards
 - **MCP Binding** — JSON-RPC 2.0 transport for LLM-native tool calling
 - **AP2 Payment Support** — Agent Payments Protocol mandate verification with Stripe/PayPal bridge
 - **OAuth 2.0 Identity Linking** — RFC 6749 with PKCE (RFC 7636) support
@@ -46,6 +47,7 @@ WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) fo
 | PUT | `/wp-json/ucp/v1/checkout-sessions/{id}` | Update session |
 | POST | `/wp-json/ucp/v1/checkout-sessions/{id}/complete` | Complete checkout |
 | POST | `/wp-json/ucp/v1/checkout-sessions/{id}/cancel` | Cancel session |
+| POST | `/wp-json/ucp/v1/payments/intent` | Create delegated PSP intent/token |
 | GET | `/wp-json/ucp/v1/products` | List products |
 | GET | `/wp-json/ucp/v1/products/{id}` | Get product details |
 | POST | `/wp-json/ucp/v1/customers/lookup` | Check if customer exists |
@@ -58,6 +60,38 @@ WooCommerce UCP implements the [Universal Commerce Protocol](https://ucp.dev) fo
 - **API Key:** Send `X-API-Key` header (keys may be scoped to a WooCommerce customer or left unassigned for guest checkouts)
 - **OAuth 2.0:** Send `Authorization: Bearer {token}` header; customers see a built-in consent screen after logging in so they can approve or deny access before tokens issue
 - Discovery and product catalog endpoints are public by default
+
+### Delegated PSP token helper
+
+If AP2 mandates are not available yet, agents can ask the store to mint Stripe PaymentIntents on-demand without ever handling PSP credentials directly:
+
+```
+POST /wp-json/ucp/v1/payments/intent
+Headers: X-API-Key or Bearer token
+Body: {
+  "amount": 129.99,
+  "currency": "USD",
+  "gateway": "stripe" // optional when only one supported PSP is active
+}
+```
+
+Response:
+
+```json
+{
+  "payment_method": "stripe",
+  "payment_token": {
+    "gateway": "stripe",
+    "value": "pi_3OyUWZ...",
+    "intent_id": "pi_3OyUWZ..."
+  },
+  "client_secret": "pi_3OyUWZ_secret_...",
+  "status": "requires_payment_method",
+  "expires_at": 1774970400
+}
+```
+
+Agents pass the `payment_token` object verbatim to `POST /checkout-sessions/{id}/complete`. The plugin stores the intent ID in order meta and lets the native Stripe gateway finish the charge. Additional gateways (PayPal, WooCommerce Payments) will be added behind the same endpoint.
 
 ## Installation
 

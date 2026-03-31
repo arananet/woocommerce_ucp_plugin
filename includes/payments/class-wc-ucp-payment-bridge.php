@@ -58,8 +58,25 @@ class WC_UCP_Payment_Bridge {
             );
         }
 
-        $gateway = sanitize_text_field( $token['gateway'] );
-        $credential = array( 'token' => sanitize_text_field( $token['value'] ) );
+        $gateway    = isset( $token['gateway'] ) ? sanitize_text_field( $token['gateway'] ) : WC_UCP_Payment_Utils::detect_single_supported_gateway();
+        $value      = sanitize_text_field( $token['value'] ?? '' );
+        $credential = array( 'token' => $value );
+
+        if ( isset( $token['intent_id'] ) ) {
+            $credential['payment_intent_id'] = sanitize_text_field( $token['intent_id'] );
+        }
+
+        if ( isset( $token['order_id'] ) ) {
+            $credential['order_id'] = sanitize_text_field( $token['order_id'] );
+        }
+
+        if ( ! $gateway ) {
+            return new WP_Error(
+                'invalid_payment_token',
+                'Payment token is missing gateway metadata.',
+                array( 'status' => 400 )
+            );
+        }
 
         switch ( $gateway ) {
             case 'stripe':
@@ -103,11 +120,12 @@ class WC_UCP_Payment_Bridge {
         $order->set_payment_method_title( $stripe_gateway->get_title() );
 
         // Store Stripe token/payment intent for the gateway to process.
-        if ( ! empty( $credential['token'] ) ) {
-            $order->update_meta_data( '_stripe_source_id', sanitize_text_field( $credential['token'] ) );
-        }
         if ( ! empty( $credential['payment_intent_id'] ) ) {
             $order->update_meta_data( '_stripe_intent_id', sanitize_text_field( $credential['payment_intent_id'] ) );
+        } elseif ( ! empty( $credential['token'] ) && 0 === strpos( $credential['token'], 'pi_' ) ) {
+            $order->update_meta_data( '_stripe_intent_id', sanitize_text_field( $credential['token'] ) );
+        } elseif ( ! empty( $credential['token'] ) ) {
+            $order->update_meta_data( '_stripe_source_id', sanitize_text_field( $credential['token'] ) );
         }
 
         $order->save();
