@@ -16,6 +16,8 @@ class WC_UCP_OAuth {
     public function register_routes() {
         $namespace = 'ucp/v1';
 
+        add_filter( 'rest_pre_serve_request', array( $this, 'maybe_serve_raw_response' ), 10, 4 );
+
         // Authorization endpoint.
         register_rest_route( $namespace, '/oauth/authorize', array(
             array(
@@ -56,6 +58,41 @@ class WC_UCP_OAuth {
                 'permission_callback' => '__return_true',
             ),
         ) );
+    }
+
+    /**
+     * Output raw HTML responses for authorize endpoint so consent UI renders in browsers.
+     *
+     * WordPress REST API JSON-encodes response data by default. The consent screen returns
+     * fully-rendered HTML, so we intercept the response and echo it directly instead of
+     * letting the REST server wrap it inside a JSON string.
+     *
+     * @param bool             $served  Whether the request has already been served.
+     * @param WP_REST_Response $result  Response object.
+     * @param WP_REST_Request  $request Request instance.
+     * @param WP_REST_Server   $server  Server instance.
+     * @return bool
+     */
+    public function maybe_serve_raw_response( $served, $result, $request, $server ) {
+        if ( true === $served ) {
+            return $served;
+        }
+
+        if ( ! $result instanceof WP_REST_Response ) {
+            return $served;
+        }
+
+        if ( 0 !== strpos( $request->get_route(), '/ucp/v1/oauth/authorize' ) ) {
+            return $served;
+        }
+
+        $headers = $result->get_headers();
+        if ( empty( $headers['Content-Type'] ) || false === stripos( $headers['Content-Type'], 'text/html' ) ) {
+            return $served;
+        }
+
+        echo $result->get_data();
+        return true;
     }
 
     /**
