@@ -24,12 +24,12 @@ class WC_UCP_Payment_Utils {
 			$payload = $payload['payment'];
 		}
 
-		if ( isset( $payload['payment_token'] ) && is_string( $payload['payment_token'] ) ) {
-			$payload['payment_token'] = self::wrap_payment_token_string( $payload['payment_token'] );
-		}
+        if ( isset( $payload['payment_token'] ) && is_string( $payload['payment_token'] ) ) {
+            $payload['payment_token'] = self::wrap_payment_token_string( $payload['payment_token'] );
+        }
 
-		return $payload;
-	}
+        return $payload;
+    }
 
 	/**
 	 * Wrap a token string with gateway metadata when agents send shorthand payloads.
@@ -38,18 +38,24 @@ class WC_UCP_Payment_Utils {
 	 * @return array
 	 */
 	public static function wrap_payment_token_string( $token ) {
-		$token   = sanitize_text_field( $token );
-		$wrapped = array(
-			'value' => $token,
-		);
+        $token   = sanitize_text_field( $token );
+        $wrapped = array(
+            'value' => $token,
+        );
 
-		$default_gateway = self::detect_single_supported_gateway();
-		if ( $default_gateway ) {
-			$wrapped['gateway'] = $default_gateway;
-		}
+        $detected_gateway = self::detect_gateway_from_token_value( $token );
+        if ( $detected_gateway ) {
+            $wrapped['gateway'] = $detected_gateway;
+            return $wrapped;
+        }
 
-		return $wrapped;
-	}
+        $default_gateway = self::detect_single_supported_gateway();
+        if ( $default_gateway ) {
+            $wrapped['gateway'] = $default_gateway;
+        }
+
+        return $wrapped;
+    }
 
 	/**
 	 * Detect a single supported payment gateway to use as default.
@@ -95,6 +101,32 @@ class WC_UCP_Payment_Utils {
 			}
 		}
 
-		return $available;
-	}
+        return $available;
+    }
+
+    /**
+     * Infer gateway from token prefix patterns (best-effort).
+     *
+     * @param string $token Token value.
+     * @return string|null
+     */
+    private static function detect_gateway_from_token_value( $token ) {
+        $prefix = substr( $token, 0, 6 );
+
+        $stripe_prefixes = array( 'pm_', 'pi_', 'tok_', 'seti_', 'src_' );
+        foreach ( $stripe_prefixes as $stripe_prefix ) {
+            if ( 0 === strpos( $token, $stripe_prefix ) ) {
+                return 'stripe';
+            }
+        }
+
+        $paypal_prefixes = array( 'PAYID-', 'PAY-', 'EC-', 'I-', 'BA-' );
+        foreach ( $paypal_prefixes as $paypal_prefix ) {
+            if ( 0 === strpos( $token, $paypal_prefix ) ) {
+                return 'paypal';
+            }
+        }
+
+        return null;
+    }
 }
