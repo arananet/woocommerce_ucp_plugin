@@ -130,6 +130,11 @@ class WC_UCP_Payment_Bridge {
 
         $order->save();
 
+        $intent_id = $order->get_meta( '_stripe_intent_id', true );
+        if ( $intent_id ) {
+            return $this->finalize_stripe_intent( $order, $intent_id );
+        }
+
         // Attempt to process payment through the gateway.
         try {
             $result = $stripe_gateway->process_payment( $order->get_id() );
@@ -150,6 +155,58 @@ class WC_UCP_Payment_Bridge {
                 array( 'status' => 500 )
             );
         }
+    }
+
+    /**
+     * Finalize/confirm a delegated Stripe PaymentIntent without invoking checkout notices.
+     *
+     * @param WC_Order $order     WooCommerce order.
+     * @param string   $intent_id Stripe PaymentIntent ID.
+     * @return true|WP_Error
+     */
+    private function finalize_stripe_intent( $order, $intent_id ) {
+        if ( ! class_exists( 'WC_Stripe_API' ) ) {
+            return new WP_Error(
+                'stripe_unavailable',
+                'Stripe payment gateway is not available.',
+                array( 'status' => 500 )
+            );
+        }
+
+        $intent = WC_Stripe_API::request( array(), 'payment_intents/' . $intent_id );
+        if ( is_wp_error( $intent ) ) {
+            return $intent;
+        }
+
+        $status = isset( $intent->status ) ? $intent->status : '';
+
+        if ( 'requires_capture' === $status ) {
+            $capture = WC_Stripe_API::request( array(), 'payment_intents/' . $intent_id . '/capture' );
+            if ( is_wp_error( $capture ) ) {
+                return $capture;
+            }
+            $intent = $capture;
+            $status = isset( $intent->status ) ? $intent->status : $status;
+        }
+
+        if ( in_array( $status, array( 'succeeded', 'processing' ), true ) ) {
+            $order->payment_complete( $intent_id );
+            $order->add_order_note(
+                sprintf(
+                    /* translators: 1: PaymentIntent ID, 2: status */
+                    __( 'Stripe PaymentIntent %1$s finalized via UCP (status: %2$s).', 'woocommerce-ucp' ),
+                    $intent_id,
+                    $status
+                )
+            );
+            return true;
+        }
+
+        return new WP_Error(
+            'stripe_payment_failed',
+            sprintf( 'Stripe PaymentIntent %s returned status %s.', $intent_id, $status ),
+            array( 'status' => 402 )
+        );
     }
 
     /**

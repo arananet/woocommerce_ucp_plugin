@@ -115,11 +115,12 @@ class WC_UCP_Payments_Controller extends WC_UCP_REST_Controller {
         $stripe_customer_id = get_user_meta( $customer_id, '_stripe_customer_id', true );
 
         $body = array(
-            'amount'                => $stripe_amount,
-            'currency'              => strtolower( $currency ),
-            'payment_method_types'  => array( 'card' ),
-            'confirmation_method'   => 'manual',
-            'metadata'              => array(
+            'amount'               => $stripe_amount,
+            'currency'             => strtolower( $currency ),
+            'payment_method_types' => array( 'card' ),
+            'confirmation_method'  => 'automatic',
+            'capture_method'       => 'automatic',
+            'metadata'             => array(
                 'ucp'         => '1',
                 'customer_id' => $customer_id,
             ),
@@ -127,6 +128,13 @@ class WC_UCP_Payments_Controller extends WC_UCP_REST_Controller {
 
         if ( $stripe_customer_id ) {
             $body['customer'] = $stripe_customer_id;
+        }
+
+        $default_payment_method = $this->get_default_stripe_payment_method_id( $customer_id );
+        if ( $default_payment_method ) {
+            $body['payment_method'] = $default_payment_method;
+            $body['confirm']        = true;
+            $body['off_session']    = true;
         }
 
         $intent = WC_Stripe_API::request( $body, 'payment_intents' );
@@ -152,5 +160,36 @@ class WC_UCP_Payments_Controller extends WC_UCP_REST_Controller {
             'status'        => isset( $intent->status ) ? $intent->status : 'requires_payment_method',
             'expires_at'    => $expires_at,
         );
+    }
+
+    /**
+     * Attempt to locate the customer's default Stripe payment method/token.
+     *
+     * @param int $customer_id WooCommerce customer ID.
+     * @return string|null
+     */
+    private function get_default_stripe_payment_method_id( $customer_id ) {
+        if ( ! class_exists( 'WC_Payment_Tokens' ) ) {
+            return null;
+        }
+
+        $token = WC_Payment_Tokens::get_customer_default_token( $customer_id );
+        if ( $token && in_array( $token->get_gateway_id(), array( 'stripe', 'stripe_cc' ), true ) ) {
+            return $token->get_token();
+        }
+
+        $customer_tokens = WC_Payment_Tokens::get_customer_tokens( $customer_id, 'stripe' );
+        if ( empty( $customer_tokens ) ) {
+            $customer_tokens = WC_Payment_Tokens::get_customer_tokens( $customer_id, 'stripe_cc' );
+        }
+
+        if ( ! empty( $customer_tokens ) ) {
+            $first = reset( $customer_tokens );
+            if ( $first instanceof WC_Payment_Token ) {
+                return $first->get_token();
+            }
+        }
+
+        return null;
     }
 }
